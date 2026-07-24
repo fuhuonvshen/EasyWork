@@ -40,6 +40,20 @@ src-tauri/icons/icon.png
 
 # Build logs
 build_errors.txt
+src-tauri/agent_debug.log
 
 # Platform-specific binaries (llama-server, CUDA DLLs, etc.) — downloaded at runtime
 src-tauri/binaries/
+
+# Local SQLite database (generated at runtime)
+src-tauri/easywork.db
+src-tauri/easework.db
+
+# Downloaded models (Whisper, SenseVoice, GGUF)
+src-tauri/models/
+
+# Prebuilt sherpa-onnx static libraries (downloaded by build script)
+src-tauri/sherpa-lib/
+
+# Cargo build cache (backup files)
+src-tauri/.cargo/config.toml.bak
