@@ -64,6 +64,10 @@ jobs:
         working-directory: src-tauri/py_backend
         run: pip install -r requirements.txt
 
+      - name: Install build tools (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install cmake
+
       - name: Build Tauri app
         run: pnpm tauri build
         env:
