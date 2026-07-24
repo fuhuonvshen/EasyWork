@@ -6,6 +6,9 @@ on:
 jobs:
   build:
     runs-on: macos-latest
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "10.15"
+      CMAKE_OSX_DEPLOYMENT_TARGET: "10.15"
 
     steps:
       - name: Checkout
@@ -45,7 +48,6 @@ jobs:
         env:
           APPLE_SIGNING_IDENTITY: "-"
           RUST_BACKTRACE: 1
-          MACOSX_DEPLOYMENT_TARGET: "10.15"
 
       - name: Upload DMG
         uses: actions/upload-artifact@v4
