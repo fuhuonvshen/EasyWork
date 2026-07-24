@@ -40,3 +40,6 @@ src-tauri/icons/icon.png
 
 # Build logs
 build_errors.txt
+
+# Platform-specific binaries (llama-server, CUDA DLLs, etc.) — downloaded at runtime
+src-tauri/binaries/
