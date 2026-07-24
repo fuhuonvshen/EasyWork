@@ -31,10 +31,6 @@ Thumbs.db
 .vscode/settings.json
 .idea/
 
-# Tauri local state
-src-tauri/icons/icon.ico
-src-tauri/icons/icon.png
-
 # Claude Code local state (settings, memories, worktrees)
 .claude/
 
