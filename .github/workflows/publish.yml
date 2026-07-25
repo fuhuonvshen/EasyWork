@@ -10,7 +10,17 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-latest
+
+    runs-on: ${{ matrix.os }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "10.15"
+      CMAKE_OSX_DEPLOYMENT_TARGET: "10.15"
 
     steps:
       - name: Checkout
@@ -39,9 +49,9 @@ jobs:
             ${{ runner.os }}-pnpm-
 
       - name: Install Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          cache: true
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -57,10 +67,15 @@ jobs:
         working-directory: src-tauri/py_backend
         run: pip install -r requirements.txt
 
+      - name: Install macOS build deps
+        if: matrix.os == 'macos-latest'
+        run: brew install cmake libomp
+
       - name: Build Tauri app
         run: pnpm tauri build
         env:
           RUSTFLAGS: ""
+          APPLE_SIGNING_IDENTITY: ${{ matrix.os == 'macos-latest' && '-' || '' }}
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
