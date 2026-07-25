@@ -74,8 +74,7 @@ jobs:
         env:
           RUSTFLAGS: ""
           APPLE_SIGNING_IDENTITY: ${{ matrix.os == 'macos-latest' && '-' || '' }}
-          CXXFLAGS: ${{ matrix.os == 'windows-latest' && '/MD' || '' }}
-          CFLAGS: ${{ matrix.os == 'windows-latest' && '/MD' || '' }}
+          CL: ${{ matrix.os == 'windows-latest' && '/MD' || '' }}
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
