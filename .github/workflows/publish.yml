@@ -69,21 +69,6 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: brew install cmake libomp
 
-      - name: Download sherpa-onnx prebuilt libs (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: bash
-        run: |
-          set -ex
-          SHERPA_TAG=v1.13.3
-          SHERPA_PKG=sherpa-onnx-${SHERPA_TAG}-win-x64-static-MD-Release-lib
-          mkdir -p src-tauri/target/sherpa-onnx-prebuilt
-          curl -fL -o src-tauri/target/sherpa-onnx-prebuilt/${SHERPA_PKG}.tar.bz2 \
-            https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_TAG}/${SHERPA_PKG}.tar.bz2
-          cd src-tauri/target/sherpa-onnx-prebuilt
-          tar -xjf ${SHERPA_PKG}.tar.bz2
-          ls -la ${SHERPA_PKG}/lib/*.lib
-          echo "SHERPA_ONNX_LIB_DIR=$(pwd)/${SHERPA_PKG}/lib" >> $GITHUB_ENV
-
       - name: Build Tauri app
         run: pnpm tauri build
         env:
