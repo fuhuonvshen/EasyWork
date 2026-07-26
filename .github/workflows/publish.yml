@@ -73,12 +73,16 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: bash
         run: |
+          set -ex
+          SHERPA_TAG=v1.13.3
+          SHERPA_PKG=sherpa-onnx-${SHERPA_TAG}-win-x64-static-MD-Release-lib
           mkdir -p src-tauri/target/sherpa-onnx-prebuilt
-          curl -fL -o src-tauri/target/sherpa-onnx-prebuilt/lib.tar.bz2 \
-            https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.3/sherpa-onnx-v1.13.3-win-x64-static-MD-Release-lib.tar.bz2
+          curl -fL -o src-tauri/target/sherpa-onnx-prebuilt/${SHERPA_PKG}.tar.bz2 \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_TAG}/${SHERPA_PKG}.tar.bz2
           cd src-tauri/target/sherpa-onnx-prebuilt
-          tar -xf lib.tar.bz2
-          echo "SHERPA_ONNX_LIB_DIR=$(pwd)/sherpa-onnx-v1.13.3-win-x64-static-MD-Release-lib/lib" >> $GITHUB_ENV
+          tar -xjf ${SHERPA_PKG}.tar.bz2
+          ls -la ${SHERPA_PKG}/lib/*.lib
+          echo "SHERPA_ONNX_LIB_DIR=$(pwd)/${SHERPA_PKG}/lib" >> $GITHUB_ENV
 
       - name: Build Tauri app
         run: pnpm tauri build
