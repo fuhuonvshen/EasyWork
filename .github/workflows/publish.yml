@@ -74,18 +74,11 @@ jobs:
         shell: pwsh
         run: |
           $pkg = "sherpa-onnx-v1.13.3-win-x64-static-MD-Release-lib"
-          $dir = "${{ github.workspace }}\src-tauri\target\sherpa-onnx-prebuilt"
-          New-Item -ItemType Directory -Force -Path $dir
-          curl.exe -fL -o "$dir\$pkg.tar.bz2" "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.3/$pkg.tar.bz2"
-          tar -xjf "$dir\$pkg.tar.bz2" -C $dir
-          "$pkg\lib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Set SHERPA_ONNX_LIB_DIR
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          $dir = "${{ github.workspace }}\src-tauri\target\sherpa-onnx-prebuilt\sherpa-onnx-v1.13.3-win-x64-static-MD-Release-lib\lib"
-          echo "SHERPA_ONNX_LIB_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $libdir = "${{ github.workspace }}\src-tauri\target\sherpa-onnx-prebuilt\$pkg\lib"
+          New-Item -ItemType Directory -Force -Path "${{ github.workspace }}\src-tauri\target\sherpa-onnx-prebuilt"
+          curl.exe -fL -o "${{ github.workspace }}\src-tauri\target\sherpa-onnx-prebuilt\$pkg.tar.bz2" "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.3/$pkg.tar.bz2"
+          tar -xjf "${{ github.workspace }}\src-tauri\target\sherpa-onnx-prebuilt\$pkg.tar.bz2" -C "${{ github.workspace }}\src-tauri\target\sherpa-onnx-prebuilt"
+          echo "SHERPA_ONNX_LIB_DIR=$libdir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build Tauri app
         run: pnpm tauri build
