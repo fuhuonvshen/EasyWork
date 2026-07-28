@@ -8,17 +8,19 @@ use std::path::Path;
 
 /// 启动 Python Agent sidecar 并等待健康检查。
 /// 返回 (sidecar 代理, 子进程句柄)，上层负责注册到 Tauri state。
+/// `bundled_agent` 是可选的内置 agent 可执行文件路径（由 PyInstaller 打包）。
 pub async fn init(
     project_dir: &Path,
     manifest_dir: &Path,
     db_path: &Path,
     port: u16,
     settings: &HashMap<String, String>,
+    bundled_agent: Option<&Path>,
 ) -> Result<(AgentSidecar, Option<tokio::process::Child>)> {
     log::info!("Starting Python agent sidecar on port {}...", port);
     let sidecar = AgentSidecar::new(port);
 
-    match spawn_python_server(project_dir, manifest_dir, db_path, port, settings).await {
+    match spawn_python_server(project_dir, manifest_dir, db_path, port, settings, bundled_agent).await {
         Ok(mut child) => {
             // Pipe stdout/stderr to logs
             if let Some(stdout) = child.stdout.take() {
