@@ -109,6 +109,12 @@ export default function AgentApp({ onBack }: { onBack: () => void }) {
         >
           开始新对话
         </button>
+        <button
+          onClick={onBack}
+          className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+        >
+          返回工作台
+        </button>
       </div>
     );
   }

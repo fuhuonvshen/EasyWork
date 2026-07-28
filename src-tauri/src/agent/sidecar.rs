@@ -11,6 +11,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 const DEFAULT_PORT: u16 = 9876;
 const HEALTH_CHECK_INTERVAL: Duration = Duration::from_millis(500);
 const HEALTH_CHECK_TIMEOUT: Duration = Duration::from_secs(30);
@@ -88,13 +91,40 @@ pub fn find_available_port(start_port: u16, max_attempts: u16) -> Option<u16> {
 
 /// Spawn the Python agent server.
 /// Uses local llama-server by default; can use DeepSeek online if configured in settings.
+/// If `bundled_agent` is provided and exists, runs it directly instead of system Python.
 pub async fn spawn_python_server(
     project_dir: &std::path::Path,
     manifest_dir: &std::path::Path,
     db_path: &std::path::Path,
     port: u16,
     settings: &std::collections::HashMap<String, String>,
+    bundled_agent: Option<&std::path::Path>,
 ) -> Result<tokio::process::Child, String> {
+    let llm_backend = settings.get("agent_llm_backend")
+        .filter(|s| !s.is_empty())
+        .map(|s| s.as_str())
+        .unwrap_or("local");
+
+    // ── Try bundled agent binary first ──
+    if let Some(agent_path) = bundled_agent {
+        if agent_path.exists() {
+            log::info!("Using bundled agent: {:?}", agent_path);
+            let mut cmd = tokio::process::Command::new(agent_path);
+            cmd.env("AGENT_PORT", port.to_string())
+                .env("AGENT_DB_PATH", db_path.to_string_lossy().to_string())
+                .env("AGENT_PROJECT_DIR", project_dir.to_string_lossy().to_string())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+            set_llm_env(&mut cmd, llm_backend, settings);
+            #[cfg(target_os = "windows")]
+            cmd.as_std_mut().creation_flags(0x08000000);
+            return cmd.spawn()
+                .map_err(|e| format!("无法启动内置 agent: {}", e));
+        }
+        log::warn!("内置 agent 不存在 ({:?})，回退到系统 Python", agent_path);
+    }
+
+    // ── Fall back to system Python ──
     let python_cmd = find_python();
     let server_dir = manifest_dir.join("py_backend");
 
@@ -104,11 +134,6 @@ pub async fn spawn_python_server(
             server_dir.display()
         ));
     }
-
-    let llm_backend = settings.get("agent_llm_backend")
-        .filter(|s| !s.is_empty())
-        .map(|s| s.as_str())
-        .unwrap_or("local");
 
     let mut cmd = tokio::process::Command::new(&python_cmd);
     cmd.arg("-u")
@@ -120,10 +145,25 @@ pub async fn spawn_python_server(
         .env("AGENT_PROJECT_DIR", project_dir.to_string_lossy().to_string())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    set_llm_env(&mut cmd, llm_backend, settings);
 
+    #[cfg(target_os = "windows")]
+    cmd.as_std_mut().creation_flags(0x08000000);
+
+    let child = cmd.spawn()
+        .map_err(|e| format!("无法启动 Python agent 服务器 ({}): {}", python_cmd, e))?;
+
+    Ok(child)
+}
+
+fn set_llm_env(
+    cmd: &mut tokio::process::Command,
+    llm_backend: &str,
+    settings: &std::collections::HashMap<String, String>,
+) {
     match llm_backend {
         "online" => {
-            cmd.env("LLM_BACKEND", "deepseek")  // Python agent uses "deepseek" for OpenAI-compatible
+            cmd.env("LLM_BACKEND", "deepseek")
                 .env("DEEPSEEK_BASE_URL", settings.get("agent_online_url")
                     .filter(|s| !s.is_empty())
                     .map(|s| s.as_str())
@@ -138,18 +178,12 @@ pub async fn spawn_python_server(
                     .unwrap_or(""));
         }
         _ => {
-            // Default: local llama-server (OpenAI-compatible API)
             cmd.env("LLM_BACKEND", "deepseek")
                 .env("DEEPSEEK_BASE_URL", "http://127.0.0.1:11435")
                 .env("DEEPSEEK_MODEL", "local")
                 .env("DEEPSEEK_API_KEY", "");
         }
     }
-
-    let child = cmd.spawn()
-        .map_err(|e| format!("无法启动 Python agent 服务器 ({}): {}", python_cmd, e))?;
-
-    Ok(child)
 }
 
 /// Poll /health until the Python server responds or timeout expires.

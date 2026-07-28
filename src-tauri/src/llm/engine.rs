@@ -13,6 +13,9 @@ use futures_util::StreamExt;
 use reqwest::Client;
 use std::path::PathBuf;
 use std::process::Stdio;
+
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::RwLock;
@@ -230,6 +233,9 @@ impl LlmEngine {
                 .arg(ngl.to_string())
                 .arg("--ctx-size")
                 .arg("32768");
+
+            #[cfg(target_os = "windows")]
+            cmd.as_std_mut().creation_flags(0x08000000);
 
             match cmd.spawn() {
                 Ok(child) => {
