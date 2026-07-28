@@ -33,9 +33,7 @@
     ],
     "macOS": {
       "minimumSystemVersion": "10.15",
-      "infoPlist": {
-        "NSMicrophoneUsageDescription": "EasyWork 需要麦克风权限以录制会议音频"
-      }
+      "infoPlist": "Info.plist"
     },
     "icon": [
       "icons/icon.ico",
