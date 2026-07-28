@@ -208,7 +208,10 @@ pub async fn wait_for_healthy(sidecar: &AgentSidecar, timeout: Duration) -> Resu
 fn find_python() -> String {
     // First try common command names
     for cmd in &["python", "python3", "py"] {
-        if std::process::Command::new(cmd)
+        let mut pycmd = std::process::Command::new(cmd);
+        #[cfg(target_os = "windows")]
+        pycmd.creation_flags(0x08000000);
+        if pycmd
             .arg("--version")
             .stdout(Stdio::null())
             .stderr(Stdio::null())

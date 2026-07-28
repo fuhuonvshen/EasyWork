@@ -323,7 +323,11 @@ impl LlmEngine {
     /// Checks system paths AND the app's own binaries directory (for bundled CUDA DLLs).
     pub fn check_cuda(bin_dir: &std::path::Path) -> bool {
         // Must have NVIDIA driver
-        let has_driver = std::process::Command::new("nvidia-smi")
+        #[allow(unused_mut)]
+        let mut nvcmd = std::process::Command::new("nvidia-smi");
+        #[cfg(target_os = "windows")]
+        nvcmd.creation_flags(0x08000000);
+        let has_driver = nvcmd
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status()
