@@ -350,14 +350,15 @@ async fn start_agent_sidecar(app_handle: &tauri::AppHandle, app_dir: &std::path:
     // Find bundled agent executable (PyInstaller-built) if available
     let agent_exe_name = if cfg!(target_os = "windows") { "easywork-agent.exe" } else { "easywork-agent" };
     let bundled_agent = {
+        // Development: check project binaries/ directory
         let dev_path = manifest_dir.join("binaries").join(agent_exe_name);
         if dev_path.exists() {
             Some(dev_path)
         } else {
-            // Check resource directory (release build)
+            // Release: check resource directory (Tauri preserves relative path)
             app_handle.path().resource_dir()
                 .ok()
-                .map(|d| d.join(agent_exe_name))
+                .map(|d| d.join("binaries").join(agent_exe_name))
                 .filter(|p| p.exists())
         }
     };
