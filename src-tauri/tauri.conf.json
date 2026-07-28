@@ -31,6 +31,12 @@
     "resources": [
       "binaries/easywork-agent*"
     ],
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "EasyWork 需要麦克风权限以录制会议音频"
+      }
+    },
     "icon": [
       "icons/icon.ico",
       "icons/32x32.png",

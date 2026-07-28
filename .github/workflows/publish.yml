@@ -82,6 +82,19 @@ jobs:
             --exclude matplotlib --exclude IPython --exclude PyQt5 --exclude PySide6 \
             --noconfirm --clean -p .
 
+      - name: Build agent binary (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          pip install pyinstaller
+          cd src-tauri\py_backend
+          pyinstaller --onefile --name easywork-agent --distpath ..\binaries main.py ^
+            --add-data "data;data" --add-data "llm;llm" --add-data "tools;tools" ^
+            --hidden-import uvicorn --hidden-import httpx --hidden-import aiosqlite ^
+            --hidden-import tiktoken --hidden-import openpyxl --hidden-import pandas ^
+            --hidden-import pydantic --hidden-import yaml --hidden-import xlrd ^
+            --exclude matplotlib --exclude IPython --exclude PyQt5 --exclude PySide6 ^
+            --noconfirm --clean -p .
+
       - name: Download sherpa-onnx MD prebuilt libs (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
