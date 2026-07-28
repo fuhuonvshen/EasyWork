@@ -40,6 +40,18 @@ jobs:
         run: |
           brew install cmake libomp
 
+      - name: Build agent binary with PyInstaller
+        run: |
+          pip install pyinstaller
+          cd src-tauri/py_backend
+          pyinstaller --onefile --name easywork-agent --distpath ../binaries main.py \
+            --add-data "data:data" --add-data "llm:llm" --add-data "tools:tools" \
+            --hidden-import uvicorn --hidden-import httpx --hidden-import aiosqlite \
+            --hidden-import tiktoken --hidden-import openpyxl --hidden-import pandas \
+            --hidden-import pydantic --hidden-import yaml --hidden-import xlrd \
+            --exclude matplotlib --exclude IPython --exclude PyQt5 --exclude PySide6 \
+            --noconfirm --clean -p .
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
