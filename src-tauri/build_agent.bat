@@ -51,13 +51,16 @@ pyinstaller --onefile ^
     --hidden-import openpyxl ^
     --hidden-import pandas ^
     --hidden-import pydantic ^
-    --hidden-import yaml ^
-    --hidden-import xlrd ^
-    --hidden-import lxml ^
-    --hidden-import lxml.etree ^
+    --collect-all lxml ^
     --hidden-import email.mime.text ^
     --hidden-import email.mime.multipart ^
     --hidden-import email.mime.base ^
+    --hidden-import py_backend.tools.sandbox ^
+    --hidden-import py_backend.tools.file_preview ^
+    --hidden-import py_backend.tools.handlers.email ^
+    --hidden-import py_backend.tools.handlers.execute_python ^
+    --hidden-import py_backend.tools.handlers.todo ^
+    --hidden-import py_backend.tools.handlers.xlsx ^
     -p . ^
     "agent_launcher.py"
 
