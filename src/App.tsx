@@ -9,6 +9,7 @@ import MinutesApp from "./minutes";
 import AgentApp from "./agent/AgentApp";
 import ReminderModal from "./ReminderModal";
 import { ToastContainer, showToast } from "./components/Toast";
+import UpdateDialog from "./components/UpdateDialog";
 import type { MinutesTab } from "./types";
 
 const MINUTES_TABS: MinutesTab[] = ["today", "history", "schedule", "reports"];
@@ -32,19 +33,35 @@ export default function App() {
   }, []);
 
   // Check for updates on startup
+  const [updateInfo, setUpdateInfo] = useState<{
+    version: string;
+    body: string;
+    downloadAndInstall: () => Promise<void>;
+  } | null>(null);
+
   useEffect(() => {
     (async () => {
       try {
         const { check } = await import("@tauri-apps/plugin-updater");
-        const { relaunch } = await import("@tauri-apps/plugin-process");
         const update = await check();
         if (update?.available) {
-          await update.downloadAndInstall();
-          await relaunch();
+          setUpdateInfo({
+            version: update.version,
+            body: update.body || "",
+            downloadAndInstall: () => update.downloadAndInstall(),
+          });
         }
       } catch {}
     })();
   }, []);
+
+  const handleUpdateInstall = async () => {
+    const { relaunch } = await import("@tauri-apps/plugin-process");
+    if (updateInfo) {
+      await updateInfo.downloadAndInstall();
+      await relaunch();
+    }
+  };
 
   // Schedule reminder — poll every 2s
   const [reminder, setReminder] = useState<{ id: string; title: string; startTime: string; zoomUrl: string } | null>(null);
@@ -147,6 +164,14 @@ export default function App() {
             navigateToRecording(r.title, r.id);
           }}
           onClose={() => { setReminder(null); invoke("dismiss_reminder"); }}
+        />
+      )}
+      {updateInfo && (
+        <UpdateDialog
+          version={updateInfo.version}
+          body={updateInfo.body}
+          onInstall={handleUpdateInstall}
+          onDismiss={() => setUpdateInfo(null)}
         />
       )}
       <ToastContainer />
