@@ -19,8 +19,13 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install npm dependencies
-        run: npm i
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -51,7 +56,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build Tauri app
-        run: npm run tauri build
+        run: pnpm tauri build
         env:
           APPLE_SIGNING_IDENTITY: "-"
           RUST_BACKTRACE: 1

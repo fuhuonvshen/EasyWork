@@ -31,6 +31,14 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -40,9 +48,6 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
           cache-dependency-path: src-tauri/py_backend/requirements.txt
-
-      - name: Install npm dependencies
-        run: npm i
 
       - name: Install Python dependencies
         working-directory: src-tauri/py_backend
@@ -85,7 +90,7 @@ jobs:
           echo "SHERPA_ONNX_LIB_DIR=$libdir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build Tauri app
-        run: npm run tauri build
+        run: pnpm tauri build
         env:
           RUSTFLAGS: ""
           APPLE_SIGNING_IDENTITY: ${{ matrix.os == 'macos-latest' && '-' || '' }}
