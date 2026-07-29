@@ -4,7 +4,7 @@ import { useState } from "react";
 interface UpdateInfo {
   version: string;
   body: string;
-  progress: number; // 0–100, 0 means not started / unknown
+  progress: number; // 0 = idle, 1 = downloading (indeterminate), 100 = done
   onInstall: () => Promise<void>;
   onDismiss: () => void;
 }
@@ -12,6 +12,7 @@ interface UpdateInfo {
 export default function UpdateDialog({ version, body, progress, onInstall, onDismiss }: UpdateInfo) {
   const [installing, setInstalling] = useState(false);
   const downloading = progress > 0 && progress < 100;
+  const determinate = progress > 5; // show percentage only when meaningful
 
   const handleInstall = async () => {
     setInstalling(true);
@@ -48,13 +49,15 @@ export default function UpdateDialog({ version, body, progress, onInstall, onDis
         {(installing || downloading) && (
           <div className="mb-5">
             <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span>{downloading ? "正在下载…" : installing ? "正在安装…" : ""}</span>
-              {progress > 0 && <span>{progress}%</span>}
+              <span>{installing ? "正在安装…" : "正在下载…"}</span>
+              {determinate && <span>{progress}%</span>}
             </div>
             <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
               <div
-                className="h-full rounded-full bg-blue-600 transition-all duration-300"
-                style={{ width: `${Math.max(progress, 5)}%` }}
+                className={`h-full rounded-full bg-blue-600 transition-all duration-300 ${
+                  !determinate ? "animate-pulse" : ""
+                }`}
+                style={{ width: determinate ? `${progress}%` : "30%" }}
               />
             </div>
           </div>

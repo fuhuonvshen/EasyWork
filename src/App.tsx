@@ -74,21 +74,15 @@ export default function App() {
   const handleUpdateInstall = async () => {
     const { relaunch } = await import("@tauri-apps/plugin-process");
     if (!updateInfo) return;
-    // Listen for download progress events before starting the download
-    const { onUpdaterEvent } = await import("@tauri-apps/plugin-updater");
-    const unlisten = await onUpdaterEvent((event) => {
-      if (event.status === "DOWNLOAD_PROGRESS") {
-        const data = event.data as { downloaded?: number; total?: number } | undefined;
-        if (data?.total && data.total > 0) {
-          setUpdateProgress(Math.round((data.downloaded ?? 0) / data.total * 100));
-        }
-      }
-    });
+    // Show indeterminate progress while downloading (no progress API in this plugin version)
+    setUpdateProgress(1);
     try {
       await updateInfo.downloadAndInstall();
+      setUpdateProgress(100);
       await relaunch();
-    } finally {
-      unlisten();
+    } catch (e) {
+      setUpdateProgress(0);
+      console.error("更新失败", e);
     }
   };
 
