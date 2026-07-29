@@ -1,0 +1,67 @@
+@echo off
+REM EasyWork - 构建 Python Agent 独立可执行文件
+REM 使用 PyInstaller 将 py_backend/ 打包为单个 exe
+REM 运行前请先: pip install pyinstaller
+
+setlocal enabledelayedexpansion
+
+cd /d "%~dp0"
+
+set AGENT_NAME=easywork-agent
+set OUT_DIR=binaries
+
+REM 检测目标架构
+if "%PROCESSOR_ARCHITECTURE%"=="AMD64" (
+    set ARCH=x86_64
+) else (
+    set ARCH=%PROCESSOR_ARCHITECTURE%
+)
+
+echo ==^> 正在打包 Python Agent (EasyWork)...
+echo    架构: %ARCH%
+echo    输出: %OUT_DIR%/%AGENT_NAME%.exe
+
+REM 清理旧构建
+if exist "%AGENT_NAME%.spec" del "%AGENT_NAME%.spec"
+
+REM 创建输出目录
+if not exist "%OUT_DIR%" mkdir "%OUT_DIR%"
+
+REM 确保 PyInstaller 已安装
+pip install pyinstaller >nul 2>&1
+
+REM 执行 PyInstaller
+REM agent_launcher.py 位于 py_backend 包外部，避免相对导入问题
+pyinstaller --onefile ^
+    --name "%AGENT_NAME%" ^
+    --distpath "%OUT_DIR%" ^
+    --add-data "py_backend;py_backend" ^
+    --hidden-import uvicorn ^
+    --hidden-import uvicorn.logging ^
+    --hidden-import uvicorn.loops ^
+    --hidden-import uvicorn.loops.auto ^
+    --hidden-import uvicorn.protocols ^
+    --hidden-import uvicorn.protocols.http ^
+    --hidden-import uvicorn.protocols.http.auto ^
+    --hidden-import uvicorn.middleware ^
+    --hidden-import uvicorn.middleware.debug ^
+    --hidden-import httpx ^
+    --hidden-import aiosqlite ^
+    --hidden-import tiktoken ^
+    --hidden-import openpyxl ^
+    --hidden-import pandas ^
+    --hidden-import pydantic ^
+    --hidden-import yaml ^
+    --hidden-import xlrd ^
+    -p . ^
+    "agent_launcher.py"
+
+if %ERRORLEVEL% NEQ 0 (
+    echo [错误] PyInstaller 构建失败
+    exit /b 1
+)
+
+echo ==^> 构建成功！
+echo     输出文件: %OUT_DIR%/%AGENT_NAME%.exe
+echo.
+echo 接下来运行 pnpm tauri build 即可将 agent 打包进安装包

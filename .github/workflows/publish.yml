@@ -62,16 +62,16 @@ jobs:
         shell: cmd
         run: |
           call pip install pyinstaller
-          cd /d src-tauri\py_backend
-          pyinstaller --onefile --name easywork-agent --distpath ..\binaries main.py --add-data "data;data" --add-data "llm;llm" --add-data "tools;tools" --hidden-import uvicorn --hidden-import httpx --hidden-import aiosqlite --hidden-import tiktoken --hidden-import openpyxl --hidden-import pandas --hidden-import pydantic --hidden-import yaml --hidden-import xlrd --exclude matplotlib --exclude IPython --exclude PyQt5 --exclude PySide6 --noconfirm --clean -p .
+          cd /d src-tauri
+          pyinstaller --onefile --name easywork-agent --distpath binaries agent_launcher.py --add-data "py_backend;py_backend" --hidden-import uvicorn --hidden-import httpx --hidden-import aiosqlite --hidden-import tiktoken --hidden-import openpyxl --hidden-import pandas --hidden-import pydantic --hidden-import yaml --hidden-import xlrd --exclude matplotlib --exclude IPython --exclude PyQt5 --exclude PySide6 --noconfirm --clean -p .
 
       - name: Build agent binary (macOS)
         if: matrix.os == 'macos-latest'
         run: |
           pip install pyinstaller
-          cd src-tauri/py_backend
-          pyinstaller --onefile --name easywork-agent --distpath ../binaries main.py \
-            --add-data "data:data" --add-data "llm:llm" --add-data "tools:tools" \
+          cd src-tauri
+          pyinstaller --onefile --name easywork-agent --distpath binaries agent_launcher.py \
+            --add-data "py_backend:py_backend" \
             --hidden-import uvicorn --hidden-import httpx --hidden-import aiosqlite \
             --hidden-import tiktoken --hidden-import openpyxl --hidden-import pandas \
             --hidden-import pydantic --hidden-import yaml --hidden-import xlrd \

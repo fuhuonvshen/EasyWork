@@ -43,9 +43,9 @@ jobs:
       - name: Build agent binary with PyInstaller
         run: |
           pip install pyinstaller
-          cd src-tauri/py_backend
-          pyinstaller --onefile --name easywork-agent --distpath ../binaries main.py \
-            --add-data "data:data" --add-data "llm:llm" --add-data "tools:tools" \
+          cd src-tauri
+          pyinstaller --onefile --name easywork-agent --distpath binaries agent_launcher.py \
+            --add-data "py_backend:py_backend" \
             --hidden-import uvicorn --hidden-import httpx --hidden-import aiosqlite \
             --hidden-import tiktoken --hidden-import openpyxl --hidden-import pandas \
             --hidden-import pydantic --hidden-import yaml --hidden-import xlrd \
