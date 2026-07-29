@@ -53,6 +53,11 @@ pyinstaller --onefile ^
     --hidden-import pydantic ^
     --hidden-import yaml ^
     --hidden-import xlrd ^
+    --hidden-import lxml ^
+    --hidden-import lxml.etree ^
+    --hidden-import email.mime.text ^
+    --hidden-import email.mime.multipart ^
+    --hidden-import email.mime.base ^
     -p . ^
     "agent_launcher.py"
 

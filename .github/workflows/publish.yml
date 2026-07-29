@@ -63,7 +63,7 @@ jobs:
         run: |
           call pip install pyinstaller
           cd /d src-tauri
-          pyinstaller --onefile --name easywork-agent --distpath binaries agent_launcher.py --add-data "py_backend;py_backend" --hidden-import uvicorn --hidden-import httpx --hidden-import aiosqlite --hidden-import tiktoken --hidden-import openpyxl --hidden-import pandas --hidden-import pydantic --hidden-import yaml --hidden-import xlrd --exclude matplotlib --exclude IPython --exclude PyQt5 --exclude PySide6 --noconfirm --clean -p .
+          pyinstaller --onefile --name easywork-agent --distpath binaries agent_launcher.py --add-data "py_backend;py_backend" --hidden-import uvicorn --hidden-import httpx --hidden-import aiosqlite --hidden-import tiktoken --hidden-import openpyxl --hidden-import pandas --hidden-import pydantic --hidden-import yaml --hidden-import xlrd --hidden-import lxml --hidden-import lxml.etree --hidden-import email.mime.text --hidden-import email.mime.multipart --hidden-import email.mime.base --exclude matplotlib --exclude IPython --exclude PyQt5 --exclude PySide6 --noconfirm --clean -p .
 
       - name: Build agent binary (macOS)
         if: matrix.os == 'macos-latest'
@@ -75,6 +75,8 @@ jobs:
             --hidden-import uvicorn --hidden-import httpx --hidden-import aiosqlite \
             --hidden-import tiktoken --hidden-import openpyxl --hidden-import pandas \
             --hidden-import pydantic --hidden-import yaml --hidden-import xlrd \
+            --hidden-import lxml --hidden-import lxml.etree \
+            --hidden-import email.mime.text --hidden-import email.mime.multipart --hidden-import email.mime.base \
             --exclude matplotlib --exclude IPython --exclude PyQt5 --exclude PySide6 \
             --noconfirm --clean -p .
 

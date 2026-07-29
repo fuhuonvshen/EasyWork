@@ -49,6 +49,8 @@ jobs:
             --hidden-import uvicorn --hidden-import httpx --hidden-import aiosqlite \
             --hidden-import tiktoken --hidden-import openpyxl --hidden-import pandas \
             --hidden-import pydantic --hidden-import yaml --hidden-import xlrd \
+            --hidden-import lxml --hidden-import lxml.etree \
+            --hidden-import email.mime.text --hidden-import email.mime.multipart --hidden-import email.mime.base \
             --exclude matplotlib --exclude IPython --exclude PyQt5 --exclude PySide6 \
             --noconfirm --clean -p .
 
