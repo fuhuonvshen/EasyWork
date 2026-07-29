@@ -107,7 +107,7 @@ jobs:
           else
             installer=$(ls src-tauri/target/release/bundle/dmg/*.dmg | head -1)
           fi
-          signature=$(npx tauri signer sign --private-key /tmp/tauri-key.pem \
+          signature=$(npx tauri signer sign --private-key-path /tmp/tauri-key.pem \
             --password "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "$installer")
           echo "$signature" > "${installer}.sig"
 
