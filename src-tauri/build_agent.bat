@@ -47,7 +47,7 @@ pyinstaller --onefile ^
     --hidden-import uvicorn.middleware.debug ^
     --hidden-import httpx ^
     --hidden-import aiosqlite ^
-    --collect-all tiktoken ^
+    --collect-all tiktoken --collect-all tiktoken_ext ^
     --hidden-import openpyxl ^
     --hidden-import pandas ^
     --hidden-import pydantic ^

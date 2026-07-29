@@ -48,7 +48,7 @@ jobs:
             --add-data "py_backend:py_backend" \
             --collect-all lxml \
             --hidden-import uvicorn --hidden-import httpx --hidden-import aiosqlite \
-            --collect-all tiktoken --hidden-import openpyxl --hidden-import pandas \
+            --collect-all tiktoken --collect-all tiktoken_ext --hidden-import openpyxl --hidden-import pandas \
             --hidden-import pydantic --hidden-import yaml --hidden-import xlrd \
             --hidden-import email.mime.text --hidden-import email.mime.multipart --hidden-import email.mime.base \
             --hidden-import py_backend.tools.sandbox --hidden-import py_backend.tools.file_preview \

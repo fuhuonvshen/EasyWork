@@ -1,15 +1,17 @@
-// EasyWork - 更新提示弹窗
+// EasyWork - 更新提示弹窗（含下载进度）
 import { useState } from "react";
 
 interface UpdateInfo {
   version: string;
   body: string;
+  progress: number; // 0–100, 0 means not started / unknown
   onInstall: () => Promise<void>;
   onDismiss: () => void;
 }
 
-export default function UpdateDialog({ version, body, onInstall, onDismiss }: UpdateInfo) {
+export default function UpdateDialog({ version, body, progress, onInstall, onDismiss }: UpdateInfo) {
   const [installing, setInstalling] = useState(false);
+  const downloading = progress > 0 && progress < 100;
 
   const handleInstall = async () => {
     setInstalling(true);
@@ -42,19 +44,36 @@ export default function UpdateDialog({ version, body, onInstall, onDismiss }: Up
           {body || "暂无更新说明"}
         </div>
 
+        {/* Progress bar */}
+        {(installing || downloading) && (
+          <div className="mb-5">
+            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+              <span>{downloading ? "正在下载…" : installing ? "正在安装…" : ""}</span>
+              {progress > 0 && <span>{progress}%</span>}
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+              <div
+                className="h-full rounded-full bg-blue-600 transition-all duration-300"
+                style={{ width: `${Math.max(progress, 5)}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-end gap-3">
           <button
             onClick={onDismiss}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
+            disabled={installing || downloading}
+            className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40"
           >
-            稍后再说
+            {downloading ? "下载中…" : "稍后再说"}
           </button>
           <button
             onClick={handleInstall}
-            disabled={installing}
+            disabled={installing || downloading}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {installing ? "更新中…" : "立即更新"}
+            {installing ? "安装中…" : downloading ? "下载中…" : "立即更新"}
           </button>
         </div>
       </div>

@@ -12,6 +12,13 @@ from pathlib import Path
 
 import tiktoken
 
+# Explicitly load tiktoken_ext so PyInstaller bundles the encoding data
+# and entry point discovery works in the bundled app.
+try:
+    import tiktoken_ext.openai_public  # noqa: F401
+except ImportError:
+    pass
+
 from ..config import (
     COMPRESS_TRIGGER_TOKENS,
     KEEP_RECENT_COUNT,
