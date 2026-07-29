@@ -69,6 +69,14 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: brew install cmake libomp
 
+      - name: Build agent binary (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: cmd
+        run: |
+          call pip install pyinstaller
+          cd /d src-tauri\py_backend
+          pyinstaller --onefile --name easywork-agent --distpath ..\binaries main.py --add-data "data;data" --add-data "llm;llm" --add-data "tools;tools" --hidden-import uvicorn --hidden-import httpx --hidden-import aiosqlite --hidden-import tiktoken --hidden-import openpyxl --hidden-import pandas --hidden-import pydantic --hidden-import yaml --hidden-import xlrd --exclude matplotlib --exclude IPython --exclude PyQt5 --exclude PySide6 --noconfirm --clean -p .
+
       - name: Build agent binary (macOS)
         if: matrix.os == 'macos-latest'
         run: |
@@ -81,14 +89,6 @@ jobs:
             --hidden-import pydantic --hidden-import yaml --hidden-import xlrd \
             --exclude matplotlib --exclude IPython --exclude PyQt5 --exclude PySide6 \
             --noconfirm --clean -p .
-
-      - name: Build agent binary (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: cmd
-        run: |
-          call pip install pyinstaller
-          cd /d src-tauri\py_backend
-          pyinstaller --onefile --name easywork-agent --distpath ..\binaries main.py --add-data "data;data" --add-data "llm;llm" --add-data "tools;tools" --hidden-import uvicorn --hidden-import httpx --hidden-import aiosqlite --hidden-import tiktoken --hidden-import openpyxl --hidden-import pandas --hidden-import pydantic --hidden-import yaml --hidden-import xlrd --exclude matplotlib --exclude IPython --exclude PyQt5 --exclude PySide6 --noconfirm --clean -p .
 
       - name: Download sherpa-onnx MD prebuilt libs (Windows)
         if: matrix.os == 'windows-latest'
@@ -122,11 +122,62 @@ jobs:
           signature=$(npx tauri signer sign --private-key /tmp/tauri-key.pem \
             --password "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "$installer")
           echo "$signature" > "${installer}.sig"
-          echo "SIGNATURE=$(echo "$signature" | tr -d '\n')" >> $GITHUB_ENV
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
             src-tauri/target/release/bundle/*/*
-          generate_release_notes: true
+
+  update-json:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" --dir /tmp/release-assets
+
+      - name: Generate update.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="$GITHUB_REF_NAME" VERSION="${TAG#v}"
+          DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          # Build JSON with jq (pre-installed on ubuntu)
+          jq -n \
+            --arg v "$VERSION" \
+            --arg d "$DATE" \
+            --arg win_installer "$(basename /tmp/release-assets/*.msi 2>/dev/null || echo '')" \
+            --arg win_sig "$(cat /tmp/release-assets/*.msi.sig 2>/dev/null || echo '')" \
+            --arg mac_installer "$(basename /tmp/release-assets/*.dmg 2>/dev/null || echo '')" \
+            --arg mac_sig "$(cat /tmp/release-assets/*.dmg.sig 2>/dev/null || echo '')" \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --arg tag "$TAG" \
+            '{
+              version: $v,
+              notes: "",
+              pub_date: $d,
+              platforms: {
+                "windows-x86_64": {
+                  url: "https://github.com/\($repo)/releases/download/\($tag)/\($win_installer)",
+                  signature: $win_sig
+                }
+              }
+            }
+            | if $mac_installer != "" and $mac_sig != "" then
+              .platforms["darwin-aarch64"] = {
+                url: "https://github.com/\($repo)/releases/download/\($tag)/\($mac_installer)",
+                signature: $mac_sig
+              }
+            else . end' > update.json
+
+      - name: Upload update.json to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: update.json
