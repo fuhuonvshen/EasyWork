@@ -32,6 +32,21 @@ export default function App() {
     })();
   }, []);
 
+  // Track agent sidecar initialization status (shown in agent UI)
+  const [agentInitStatus, setAgentInitStatus] = useState<{ status: string; message: string } | null>(null);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      unlisten = await listen<{ module: string; status: string; message: string }>("init-status", (e) => {
+        if (e.payload.module === "agent") {
+          setAgentInitStatus({ status: e.payload.status, message: e.payload.message });
+        }
+      });
+    })();
+    return () => { unlisten?.(); };
+  }, []);
+
   // Check for updates on startup
   const [updateInfo, setUpdateInfo] = useState<{
     version: string;
@@ -153,7 +168,7 @@ export default function App() {
         />
       )}
       {view === "agent" && (
-        <AgentApp onBack={() => setView("workbench")} />
+        <AgentApp onBack={() => setView("workbench")} initStatus={agentInitStatus} />
       )}
 
       {reminder && (

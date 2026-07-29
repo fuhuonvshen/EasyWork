@@ -8,14 +8,16 @@ import type { AgentConversationSummary, TodoItem } from "../types";
 import { ERRORS, toUserError } from "../errors";
 import { showToast } from "../components/Toast";
 
-export default function AgentApp({ onBack }: { onBack: () => void }) {
+export default function AgentApp({ onBack, initStatus }: { onBack: () => void; initStatus?: { status: string; message: string } | null }) {
   const [conversations, setConversations] = useState<AgentConversationSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [agentSubView, setAgentSubView] = useState<"chat" | "todo">("chat");
   const [todos, setTodos] = useState<TodoItem[]>([]);
 
   const loadConversations = useCallback(() => {
+    setLoadError(null);
     invoke<AgentConversationSummary[]>("agent_list_conversations")
       .then((list) => {
         setConversations(list);
@@ -25,7 +27,7 @@ export default function AgentApp({ onBack }: { onBack: () => void }) {
       })
       .catch((e) => {
         console.error(e);
-        showToast("加载对话列表失败", "error");
+        setLoadError(typeof e === "string" ? e : "加载对话列表失败");
       })
       .finally(() => setLoading(false));
   }, [activeId]);
@@ -95,6 +97,52 @@ export default function AgentApp({ onBack }: { onBack: () => void }) {
     return (
       <div className="h-full flex items-center justify-center">
         <p className="text-sm text-gray-400">加载中...</p>
+      </div>
+    );
+  }
+
+  // Show init error prominently when agent sidecar failed to start
+  if (initStatus?.status === "error" && !activeId && conversations.length === 0) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-4 px-8">
+        <div className="w-full max-w-md rounded-xl border border-red-200 bg-red-50 p-6 text-center">
+          <p className="text-sm font-medium text-red-800 mb-1">Agent 服务未启动</p>
+          <p className="text-xs text-red-600 whitespace-pre-wrap">{initStatus.message}</p>
+        </div>
+        <p className="text-xs text-gray-400 mt-2">
+          请检查日志文件或重新安装应用。日志路径：在文件资源管理器输入 %LOCALAPPDATA%\easework\easework.log
+        </p>
+        <button
+          onClick={onBack}
+          className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+        >
+          返回工作台
+        </button>
+      </div>
+    );
+  }
+
+  // Loading done but conversations failed and init hasn't reported error yet
+  // → agent is probably still starting up
+  if (!loading && !activeId && conversations.length === 0 && loadError && !initStatus) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-4 px-8">
+        <div className="w-full max-w-md rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+          <p className="text-sm font-medium text-amber-800 mb-1">Agent 正在启动...</p>
+          <p className="text-xs text-amber-600 mt-1">首次启动需要几秒钟，请稍候</p>
+        </div>
+        <button
+          onClick={() => { setLoading(true); loadConversations(); }}
+          className="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-xl hover:bg-amber-700 transition-colors"
+        >
+          重试
+        </button>
+        <button
+          onClick={onBack}
+          className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+        >
+          返回工作台
+        </button>
       </div>
     );
   }

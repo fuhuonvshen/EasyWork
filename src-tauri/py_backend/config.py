@@ -1,6 +1,7 @@
 """EasyWork Agent Server configuration. All paths and settings are resolved at startup."""
 
 import os
+import sys
 from pathlib import Path
 
 _package_dir = Path(__file__).resolve().parent
@@ -16,6 +17,9 @@ if _env_file.exists():
             _val = _val.strip().strip('"').strip("'")
             if _key not in os.environ:
                 os.environ[_key] = _val
+
+# Detect if running inside a PyInstaller bundle
+_IN_BUNDLE = getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
 
 # Server
 AGENT_PORT = int(os.environ.get("AGENT_PORT", "9876"))
@@ -37,12 +41,32 @@ LLAMACPP_TIMEOUT = int(os.environ.get("LLAMACPP_TIMEOUT", "300"))
 # Shared
 EXTRACTION_TIMEOUT = int(os.environ.get("EXTRACTION_TIMEOUT", "30"))
 
-# Project root: parent of py_backend/ or from AGENT_PROJECT_DIR env var
-_project_dir = os.environ.get("AGENT_PROJECT_DIR")
-if _project_dir:
-    PROJECT_ROOT = Path(_project_dir)
+# ── Path resolution ──────────────────────────────────────────
+#
+# Two scenarios:
+# 1. Dev / system-Python: AGENT_PROJECT_DIR is set by Rust to the local
+#    project root. All paths resolve relative to it.
+# 2. Bundled (PyInstaller) agent: AGENT_DATA_DIR is set by Rust to the
+#    Tauri app data dir. Writable data (memories, input, output, tokens)
+#    go under AGENT_DATA_DIR. Bundled resources (data, llm, tools) are
+#    accessed via sys._MEIPASS.
+
+_data_dir = os.environ.get("AGENT_DATA_DIR")  # Only set for bundled agent
+
+if _IN_BUNDLE:
+    # PyInstaller bundle: writable data goes to AGENT_DATA_DIR (app data)
+    if _data_dir:
+        _writable_root = Path(_data_dir)
+    else:
+        _writable_root = Path.home() / ".easywork"
+    PROJECT_ROOT = _writable_root  # for backward compat, not heavily used in bundle
 else:
-    PROJECT_ROOT = _package_dir.parent
+    # Dev / system-Python: use AGENT_PROJECT_DIR from Rust
+    _project_dir = os.environ.get("AGENT_PROJECT_DIR")
+    if _project_dir:
+        PROJECT_ROOT = Path(_project_dir)
+    else:
+        PROJECT_ROOT = _package_dir.parent
 
 # SQLite database (shared with Rust)
 DB_PATH = os.environ.get("AGENT_DB_PATH")
@@ -58,28 +82,50 @@ if not DB_PATH:
     if not DB_PATH:
         DB_PATH = str(PROJECT_ROOT / "easework.db")
 
-# Skills directory
-SKILLS_DIR = os.environ.get(
-    "AGENT_SKILLS_DIR",
-    str(PROJECT_ROOT / "src" / "agent" / "skills"),
-)
+# Skills directory (not bundled, will be empty in release → graceful fallback)
+if _IN_BUNDLE and _data_dir:
+    SKILLS_DIR = os.environ.get(
+        "AGENT_SKILLS_DIR",
+        str(Path(_data_dir) / "skills"),
+    )
+else:
+    SKILLS_DIR = os.environ.get(
+        "AGENT_SKILLS_DIR",
+        str(PROJECT_ROOT / "src" / "agent" / "skills"),
+    )
 
-# Memories directory
-MEMORIES_DIR = os.environ.get(
-    "AGENT_MEMORIES_DIR",
-    str(PROJECT_ROOT / "src" / "agent" / "memories"),
-)
+# Memories directory — use app data dir in bundle
+if _IN_BUNDLE and _data_dir:
+    MEMORIES_DIR = os.environ.get(
+        "AGENT_MEMORIES_DIR",
+        str(Path(_data_dir) / "memories"),
+    )
+else:
+    MEMORIES_DIR = os.environ.get(
+        "AGENT_MEMORIES_DIR",
+        str(PROJECT_ROOT / "src" / "agent" / "memories"),
+    )
 MEMORY_FILE = "MEMORY.md"
 
-# Agent input/output directories
-AGENT_INPUT_DIR = os.environ.get(
-    "AGENT_INPUT_DIR",
-    str(PROJECT_ROOT / "agent_input"),
-)
-AGENT_OUTPUT_DIR = os.environ.get(
-    "AGENT_OUTPUT_DIR",
-    str(PROJECT_ROOT / "agent_output"),
-)
+# Agent input/output directories — use app data dir in bundle
+if _IN_BUNDLE and _data_dir:
+    AGENT_INPUT_DIR = os.environ.get(
+        "AGENT_INPUT_DIR",
+        str(Path(_data_dir) / "agent_input"),
+    )
+    AGENT_OUTPUT_DIR = os.environ.get(
+        "AGENT_OUTPUT_DIR",
+        str(Path(_data_dir) / "agent_output"),
+    )
+else:
+    AGENT_INPUT_DIR = os.environ.get(
+        "AGENT_INPUT_DIR",
+        str(PROJECT_ROOT / "agent_input"),
+    )
+    AGENT_OUTPUT_DIR = os.environ.get(
+        "AGENT_OUTPUT_DIR",
+        str(PROJECT_ROOT / "agent_output"),
+    )
 
 # Docker sandbox
 DOCKER_MODE = os.environ.get("DOCKER_MODE", "auto").lower()
@@ -94,10 +140,16 @@ TOOL_TIMEOUT = int(os.environ.get("TOOL_TIMEOUT", "120"))
 # Email / Graph API
 GRAPH_CLIENT_ID = os.environ.get("GRAPH_CLIENT_ID", "")
 GRAPH_TENANT_ID = os.environ.get("GRAPH_TENANT_ID", "")
-AGENT_TOKEN_DIR = os.environ.get(
-    "AGENT_TOKEN_DIR",
-    str(PROJECT_ROOT / "agent_tokens"),
-)
+if _IN_BUNDLE and _data_dir:
+    AGENT_TOKEN_DIR = os.environ.get(
+        "AGENT_TOKEN_DIR",
+        str(Path(_data_dir) / "agent_tokens"),
+    )
+else:
+    AGENT_TOKEN_DIR = os.environ.get(
+        "AGENT_TOKEN_DIR",
+        str(PROJECT_ROOT / "agent_tokens"),
+    )
 
 # Agent behaviour
 MAX_REACT_ITERATIONS = int(os.environ.get("AGENT_MAX_REACT", "10"))

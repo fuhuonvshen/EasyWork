@@ -109,10 +109,16 @@ pub async fn spawn_python_server(
     if let Some(agent_path) = bundled_agent {
         if agent_path.exists() {
             log::info!("Using bundled agent: {:?}", agent_path);
+            // Derive data dir from db_path (db_path = app_data_dir / "easework.db")
+            let app_data_dir = db_path.parent().unwrap_or(db_path);
             let mut cmd = tokio::process::Command::new(agent_path);
             cmd.env("AGENT_PORT", port.to_string())
                 .env("AGENT_DB_PATH", db_path.to_string_lossy().to_string())
-                .env("AGENT_PROJECT_DIR", project_dir.to_string_lossy().to_string())
+                // AGENT_DATA_DIR tells the bundled agent where to write
+                // memories, agent_input, agent_output, tokens etc.
+                .env("AGENT_DATA_DIR", app_data_dir.to_string_lossy().to_string())
+                // Don't set AGENT_PROJECT_DIR — it's a compile-time CI path
+                // that doesn't exist on the user's machine.
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
             set_llm_env(&mut cmd, llm_backend, settings);
