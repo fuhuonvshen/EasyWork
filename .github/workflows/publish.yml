@@ -98,18 +98,20 @@ jobs:
       - name: Sign installer
         shell: bash
         env:
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TSK: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TSPW: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             installer=$(ls src-tauri/target/release/bundle/msi/*.msi | head -1)
           else
             installer=$(ls src-tauri/target/release/bundle/dmg/*.dmg | head -1)
           fi
-          cat > /tmp/tauri-key.pem << 'KEYEOF'
-${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-KEYEOF
-          signature=$(npx tauri signer sign --private-key-path /tmp/tauri-key.pem \
-            --password "${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}" "$installer")
+          # Strip PEM headers, keep raw base64
+          raw_key=$(grep -v '^-----' <<< "$TSK" | tr -d '\n')
+          signature=$(npx tauri signer sign \
+            --private-key "$raw_key" \
+            --password "$TSPW" \
+            "$installer")
           echo "$signature" > "${installer}.sig"
 
       - name: Upload Release Assets
