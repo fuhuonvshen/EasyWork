@@ -8,7 +8,7 @@ import Workbench from "./workbench/Workbench";
 import MinutesApp from "./minutes";
 import AgentApp from "./agent/AgentApp";
 import ReminderModal from "./ReminderModal";
-import { ToastContainer } from "./components/Toast";
+import { ToastContainer, showToast } from "./components/Toast";
 import type { MinutesTab } from "./types";
 
 const MINUTES_TABS: MinutesTab[] = ["today", "history", "schedule", "reports"];
@@ -27,6 +27,21 @@ export default function App() {
         const startupPage = settings["agent_startup_page"];
         if (startupPage === "minutes") setView("minutes");
         else if (startupPage === "agent") setView("agent");
+      } catch {}
+    })();
+  }, []);
+
+  // Check for updates on startup
+  useEffect(() => {
+    (async () => {
+      try {
+        const { check } = await import("@tauri-apps/plugin-updater");
+        const { relaunch } = await import("@tauri-apps/plugin-process");
+        const update = await check();
+        if (update?.available) {
+          await update.downloadAndInstall();
+          await relaunch();
+        }
       } catch {}
     })();
   }, []);
