@@ -402,26 +402,26 @@ fn emit_init_status(app_handle: &tauri::AppHandle, module: &str, status: &str, m
 
 async fn ensure_vad_model(app_dir: &std::path::Path, app_handle: &tauri::AppHandle) {
     let dest = app_dir.join("silero_vad.onnx");
-    // Check if a valid copy already exists (must be at least 1 MB)
+    // Check if a valid copy already exists
     if let Ok(meta) = std::fs::metadata(&dest) {
-        if meta.len() > 1_000_000 {
+        if meta.len() > 10_000 {
             log::info!("Silero VAD model ready");
             return;
         }
         log::warn!("Silero VAD 模型文件异常 ({} bytes)，重新下载", meta.len());
         let _ = std::fs::remove_file(&dest);
     }
-    // Download from multiple sources
-    log::info!("Downloading Silero VAD model (~2 MB)...");
+    // Download from multiple sources — some versions are ~600 KB, some ~2 MB
+    log::info!("Downloading Silero VAD model...");
     let urls = [
         "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
-        "https://hf-mirror.com/snakers4/silero-vad/resolve/main/files/silero_vad.onnx",
+        "https://hf-mirror.com/istupakov/silero-vad-onnx/resolve/main/silero_vad.onnx",
     ];
     for url in &urls {
         match reqwest::get(*url).await {
             Ok(resp) => match resp.bytes().await {
                 Ok(bytes) => {
-                    if bytes.len() < 1_000_000 {
+                    if bytes.len() < 10_000 {
                         log::warn!("{} 返回的文件太小 ({} bytes)，跳过", url, bytes.len());
                         continue;
                     }
