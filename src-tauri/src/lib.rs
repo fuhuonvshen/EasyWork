@@ -406,29 +406,32 @@ async fn ensure_vad_model(app_dir: &std::path::Path, app_handle: &tauri::AppHand
         log::info!("Silero VAD model ready");
         return;
     }
-    // Try resource dir first (release build)
-    if let Ok(res_dir) = app_handle.path().resource_dir() {
-        let src = res_dir.join("models").join("silero_vad.onnx");
-        if src.exists() {
-            if let Err(e) = std::fs::copy(&src, &dest) {
-                log::error!("复制 Silero VAD 模型失败: {}", e);
-            } else {
-                log::info!("Silero VAD model copied from bundle");
-                return;
-            }
+    // Try local models/ directory (dev tree)
+    let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let local = manifest_dir.join("models").join("silero_vad.onnx");
+    if local.exists() {
+        if let Err(e) = std::fs::copy(&local, &dest) {
+            log::error!("复制 Silero VAD 模型失败: {}", e);
+        } else {
+            log::info!("Silero VAD model copied from src-tauri/models/");
+            return;
         }
     }
-    // Fallback: dev tree (src-tauri/models/)
-    let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let dev_src = manifest_dir.join("models").join("silero_vad.onnx");
-    if dev_src.exists() {
-        if let Err(e) = std::fs::copy(&dev_src, &dest) {
-            log::error!("复制 Silero VAD 模型(dev)失败: {}", e);
-        } else {
-            log::info!("Silero VAD model copied from dev tree");
-        }
-    } else {
-        log::warn!("Silero VAD 模型未找到，转录将不可用");
+    // Download from GitHub (release build)
+    log::info!("Downloading Silero VAD model (~2 MB)...");
+    let url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx";
+    match reqwest::get(url).await {
+        Ok(resp) => match resp.bytes().await {
+            Ok(bytes) => {
+                if let Err(e) = std::fs::write(&dest, &bytes) {
+                    log::error!("写入 Silero VAD 模型失败: {}", e);
+                } else {
+                    log::info!("Silero VAD 模型已下载 ({:.1} KB)", bytes.len() as f64 / 1024.0);
+                }
+            }
+            Err(e) => log::error!("读取 Silero VAD 响应失败: {}", e),
+        },
+        Err(e) => log::warn!("下载 Silero VAD 模型失败 (转录将不可用): {}", e),
     }
 }
 
