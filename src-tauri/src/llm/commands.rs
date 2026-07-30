@@ -2,7 +2,8 @@
 // 提供前端调用的接口：模型列表/下载/删除/加载/状态 等
 
 use tauri::State;
-use crate::state::LlmState;
+use crate::state::{DbState, LlmState};
+use crate::database;
 
 #[tauri::command]
 pub async fn llm_list_models(
@@ -100,4 +101,50 @@ pub async fn llm_server_status(
         "currentModel": current,
         "binaryReady": binary_ready,
     }))
+}
+
+/// Called when entering the Agent module.
+/// If backend is "local" and a model is downloaded but not loaded,
+/// lazily starts llama-server. Online mode skips entirely.
+#[tauri::command]
+pub async fn agent_prepare_llm(
+    llm_state: State<'_, LlmState>,
+    db_state: State<'_, DbState>,
+) -> Result<serde_json::Value, String> {
+    // Read backend setting
+    let backend = database::repo::get_setting(&db_state.0, "agent_llm_backend")
+        .await
+        .map_err(|e| format!("读取设置失败: {}", e))?
+        .unwrap_or_default();
+
+    // Online mode — no local server needed
+    if backend != "local" {
+        return Ok(serde_json::json!({"status": "skipped"}));
+    }
+
+    let engine = llm_state.0.read().await;
+
+    // Already running
+    if engine.is_server_healthy().await {
+        let model = engine.current_model.read().await.clone();
+        return Ok(serde_json::json!({"status": "ready", "model": model}));
+    }
+
+    // Not running — find a downloaded model and start
+    let models = engine.list_models();
+    if let Some(model) = models.iter().find(|m| m.downloaded) {
+        let name = model.name.clone();
+        drop(engine); // release read lock before async startup
+        log::info!("Lazy-loading LLM model for Agent: {}", name);
+
+        let engine = llm_state.0.read().await;
+        engine.start_server(&name).await.map_err(|e| format!("启动本地模型失败: {}", e))?;
+
+        // Persist as last used model for future sessions
+        let _ = database::repo::update_setting(&db_state.0, "last_llm_model", &name).await;
+
+        Ok(serde_json::json!({"status": "loading", "model": name}))
+    } else {
+        Ok(serde_json::json!({"status": "no_model"}))
+    }
 }

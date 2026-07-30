@@ -17,8 +17,8 @@ mod whisper;
 mod state;
 
 use state::{
-    AgentProcessState, AgentSidecarState, CaptureState, DbState, DiarizationState, LlmState,
-    ReminderState, SenseVoiceState, TranscriptBufState, TranscriptTaskState, WhisperState,
+    AgentProcessState, AgentSidecarState, CaptureState, DbState, DiarizationState, KillOnDrop,
+    LlmState, ReminderState, SenseVoiceState, TranscriptBufState, TranscriptTaskState, WhisperState,
 };
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -83,7 +83,7 @@ pub fn run() {
         .manage(DiarizationState(Mutex::new(None)))
         .manage(AgentSidecarState(agent::sidecar::AgentSidecar::new(9876)))
         .manage(AgentProcessState(std::sync::Arc::new(
-            std::sync::Mutex::new(None),
+            std::sync::Mutex::new(KillOnDrop(None)),
         )))
         .setup(|app| {
             let app_dir = match app.path().app_data_dir() {
@@ -203,6 +203,7 @@ pub fn run() {
             llm::commands::llm_load_model,
             llm::commands::llm_unload_model,
             llm::commands::llm_server_status,
+            llm::commands::agent_prepare_llm,
             // ── Agent ──
             agent::commands::agent_attach_file,
             agent::commands::agent_attach_content,
@@ -367,7 +368,7 @@ async fn start_agent_sidecar(app_handle: &tauri::AppHandle, app_dir: &std::path:
     match agent::init(&project_dir, &manifest_dir, &db_path, port, settings, bundled_agent.as_deref()).await {
         Ok((_, Some(child))) => {
             match app_handle.state::<AgentProcessState>().0.try_lock() {
-                Ok(mut guard) => *guard = Some(child),
+                Ok(mut guard) => guard.0 = Some(child),
                 Err(e) => log::error!("无法获取 AgentProcessState 锁: {:?}", e),
             }
             emit_init_status(app_handle, "agent", "ok", &format!("Agent sidecar 就绪 (端口 {})", port));
@@ -399,7 +400,7 @@ fn cleanup_child_process(app_handle: &tauri::AppHandle) {
     // Kill agent sidecar process
     match app_handle.state::<AgentProcessState>().0.try_lock() {
         Ok(mut guard) => {
-            if let Some(mut child) = guard.take() {
+            if let Some(mut child) = guard.0.take() {
                 let _ = child.start_kill();
                 log::info!("Agent 子进程已终止");
             }

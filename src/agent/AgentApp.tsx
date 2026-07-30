@@ -15,6 +15,9 @@ export default function AgentApp({ onBack, initStatus }: { onBack: () => void; i
   const [loadError, setLoadError] = useState<string | null>(null);
   const [agentSubView, setAgentSubView] = useState<"chat" | "todo">("chat");
   const [todos, setTodos] = useState<TodoItem[]>([]);
+  // Lazy-load LLM server when entering Agent (local backend only)
+  const [llmLoading, setLlmLoading] = useState(true);
+  const [llmStatus, setLlmStatus] = useState<string>("");
 
   const loadConversations = useCallback(() => {
     setLoadError(null);
@@ -42,6 +45,34 @@ export default function AgentApp({ onBack, initStatus }: { onBack: () => void; i
   }, []);
 
   useEffect(() => { loadConversations(); }, []);
+
+  // Lazy-start LLM server when entering Agent (local mode only)
+  useEffect(() => {
+    invoke<{ status: string; model?: string; message?: string }>("agent_prepare_llm")
+      .then((res) => {
+        setLlmStatus(res.status);
+        if (res.status === "loading") setLlmLoading(true);
+        else setLlmLoading(false);
+      })
+      .catch((e) => {
+        console.error("准备 LLM 失败", e);
+        setLlmStatus("error");
+        setLlmLoading(false);
+      });
+    // Poll server status until ready when loading
+    const interval = setInterval(async () => {
+      try {
+        const s = await invoke<{ healthy: boolean }>("llm_server_status");
+        if (s.healthy) {
+          setLlmLoading(false);
+          setLlmStatus("ready");
+          clearInterval(interval);
+        }
+      } catch {}
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => { loadTodos(); }, []);
 
   const handleNew = async () => {
@@ -118,6 +149,17 @@ export default function AgentApp({ onBack, initStatus }: { onBack: () => void; i
         >
           返回工作台
         </button>
+      </div>
+    );
+  }
+
+  // LLM server is starting up (local model lazy-load)
+  if (llmLoading && llmStatus === "loading") {
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-3 px-8">
+        <div className="w-8 h-8 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-gray-500">正在加载本地模型…</p>
+        <p className="text-xs text-gray-400">首次加载需要 5-15 秒</p>
       </div>
     );
   }

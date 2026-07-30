@@ -21,4 +21,14 @@ pub struct TranscriptTaskState(pub Mutex<Vec<tauri::async_runtime::JoinHandle<()
 /// Agent sidecar HTTP proxy for communicating with the Python agent server.
 pub struct AgentSidecarState(pub AgentSidecar);
 /// Handle to the Python agent server child process (for lifecycle management).
-pub struct AgentProcessState(pub std::sync::Arc<std::sync::Mutex<Option<tokio::process::Child>>>);
+/// Wrapped in KillOnDrop so the process is killed when the app exits.
+pub struct KillOnDrop(pub Option<tokio::process::Child>);
+
+impl Drop for KillOnDrop {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.0.take() {
+            let _ = child.start_kill();
+        }
+    }
+}
+pub struct AgentProcessState(pub std::sync::Arc<std::sync::Mutex<KillOnDrop>>);
