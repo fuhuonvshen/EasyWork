@@ -53,3 +53,8 @@ src-tauri/sherpa-lib/
 
 # Cargo build cache (backup files)
 src-tauri/.cargo/config.toml.bak
+
+# Tauri build artifacts
+src-tauri/build/
+src-tauri/gen/
+src-tauri/easywork-build/
