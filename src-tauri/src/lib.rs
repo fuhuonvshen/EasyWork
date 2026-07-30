@@ -188,6 +188,7 @@ pub fn run() {
             minutes::meeting::get_meeting_minutes,
             minutes::meeting::get_meeting,
             minutes::meeting::update_meeting_title,
+            minutes::meeting::get_meeting_transcript,
             minutes::schedule::add_scheduled_meeting,
             minutes::schedule::delete_scheduled_meeting,
             minutes::schedule::update_scheduled_meeting,

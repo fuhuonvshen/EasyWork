@@ -57,6 +57,11 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
     .execute(pool)
     .await
     .context("创建 transcripts 表失败")?;
+    // Migration: add live_transcript column (JSON array of speaker-labeled chunks)
+    sqlx::query("ALTER TABLE transcripts ADD COLUMN live_transcript TEXT")
+        .execute(pool)
+        .await
+        .ok();
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS minutes (
@@ -446,13 +451,14 @@ pub async fn update_setting(pool: &SqlitePool, key: &str, value: &str) -> Result
 
 pub async fn insert_transcript(pool: &SqlitePool, t: &Transcript) -> Result<()> {
     sqlx::query(
-        "INSERT INTO transcripts (id, meeting_id, content, created_at)
-         VALUES (?, ?, ?, ?)",
+        "INSERT INTO transcripts (id, meeting_id, content, created_at, live_transcript)
+         VALUES (?, ?, ?, ?, ?)",
     )
     .bind(&t.id)
     .bind(&t.meeting_id)
     .bind(&t.content)
     .bind(&t.created_at)
+    .bind(&t.live_transcript)
     .execute(pool)
     .await
     .context("插入 transcript 失败")?;

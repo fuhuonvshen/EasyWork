@@ -9,6 +9,7 @@ pub async fn generate_minutes(
     wav_path: String,
     meeting_title: String,
     live_text: Option<String>,
+    live_transcript_json: Option<String>,  // JSON array of {speaker, text} chunks
     schedule_id: Option<String>,
     meeting_type: Option<String>,
     whisper_state: State<'_, WhisperState>,
@@ -124,6 +125,9 @@ pub async fn generate_minutes(
             meeting_id: meeting_id.clone(),
             content: full_transcript,
             created_at: now.clone(),
+            live_transcript: live_transcript_json.map(|s| {
+                if s.trim().is_empty() || s == "[]" { None } else { Some(s) }
+            }).flatten(),
         },
     )
     .await
@@ -251,6 +255,26 @@ pub async fn get_meeting(
         .await
         .map_err(|e| format!("查询会议失败: {}", e))?
         .ok_or_else(|| "会议不存在".into())
+}
+
+#[tauri::command]
+pub async fn get_meeting_transcript(
+    meeting_id: String,
+    db: State<'_, DbState>,
+) -> Result<serde_json::Value, String> {
+    let transcript = crate::database::repo::get_transcript(&db.0, &meeting_id)
+        .await
+        .map_err(|e| format!("查询转写失败: {}", e))?
+        .ok_or_else(|| "该会议没有转写记录".to_string())?;
+
+    let chunks: Vec<serde_json::Value> = transcript.live_transcript
+        .and_then(|s| serde_json::from_str::<Vec<serde_json::Value>>(&s).ok())
+        .unwrap_or_default();
+
+    Ok(serde_json::json!({
+        "chunks": chunks,
+        "rawContent": transcript.content,
+    }))
 }
 
 #[tauri::command]

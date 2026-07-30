@@ -115,6 +115,7 @@ export default function TodayView({
         wavPath: path,
         meetingTitle: meetingLabel || "导入的会议",
         liveText: null,
+        liveTranscriptJson: null,
         scheduleId: null,
         meetingType: meetingType,
       });
@@ -163,6 +164,7 @@ export default function TodayView({
         wavPath: path,
         meetingTitle: meetingLabel || "未命名会议",
         liveText: liveText || null,
+        liveTranscriptJson: JSON.stringify(liveTranscripts) || null,
         scheduleId: scheduleId || null,
         meetingType: meetingType,
       });

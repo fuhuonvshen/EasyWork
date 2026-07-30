@@ -24,6 +24,7 @@ pub struct Transcript {
     pub meeting_id: String,
     pub content: String,
     pub created_at: String,
+    pub live_transcript: Option<String>,  // JSON array of {speaker, text} chunks
 }
 
 /// Meeting minutes linked to a meeting.

@@ -1,7 +1,7 @@
-// EasyWork - History Detail (view/edit meeting minutes + title)
+// EasyWork - History Detail (view/edit meeting minutes + title + transcript)
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ArrowLeft, Loader, Pencil, Check, X } from "lucide-react";
+import { ArrowLeft, Loader, Pencil, Check, X, MessageSquareText } from "lucide-react";
 import Markdown from "../../components/Markdown";
 import ExportDropdown from "../../components/ExportDropdown";
 import { ERRORS, toUserError } from "../../errors";
@@ -21,6 +21,9 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
   const [editTitle, setEditTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [transcriptChunks, setTranscriptChunks] = useState<{ speaker: string; text: string }[]>([]);
+  const [transcriptLoading, setTranscriptLoading] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -43,6 +46,18 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
       setSaveError(toUserError(ERRORS.SAVE_MINUTES, e));
     }
     setSaving(false);
+  };
+
+  const loadTranscript = async () => {
+    setTranscriptLoading(true);
+    setShowTranscript(true);
+    try {
+      const res = await invoke<{ chunks: { speaker: string; text: string }[] }>("get_meeting_transcript", { meetingId });
+      setTranscriptChunks(res.chunks);
+    } catch {
+      setTranscriptChunks([]);
+    }
+    setTranscriptLoading(false);
   };
 
   const handleSaveTitle = async () => {
@@ -105,6 +120,13 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
           <div className="flex items-center gap-2">
             <ExportDropdown content={detail.content} />
             <button
+              onClick={loadTranscript}
+              className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1.5"
+            >
+              <MessageSquareText size={16} />
+              查看转写
+            </button>
+            <button
               onClick={() => setEditing(true)}
               className="px-4 py-2 text-sm font-medium text-accent-600 bg-accent-50 rounded-lg hover:bg-accent-100 transition-colors"
             >
@@ -160,6 +182,53 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
           />
         )}
       </div>
+
+      {/* Transcript popup */}
+      {showTranscript && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] mx-4 flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <MessageSquareText size={18} className="text-blue-500" />
+                <h2 className="text-lg font-semibold text-gray-900">转写记录</h2>
+              </div>
+              <button
+                onClick={() => setShowTranscript(false)}
+                className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              {transcriptLoading ? (
+                <div className="flex items-center gap-2 text-sm text-gray-400 py-8 justify-center">
+                  <Loader size={16} className="animate-spin" />
+                  加载中...
+                </div>
+              ) : transcriptChunks.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">该会议没有说话人转写记录</p>
+              ) : (
+                <div className="space-y-3">
+                  {transcriptChunks.map((item, i) => (
+                    <div key={i} className="flex gap-3">
+                      <span className={`shrink-0 mt-0.5 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                        item.speaker === "我"
+                          ? "bg-blue-100 text-blue-700"
+                          : item.speaker === "发言人"
+                          ? "bg-gray-100 text-gray-600"
+                          : "bg-amber-100 text-amber-700"
+                      }`}>
+                        {item.speaker}
+                      </span>
+                      <span className="text-sm text-gray-700">{item.text}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
