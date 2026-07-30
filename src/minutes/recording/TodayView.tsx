@@ -1,5 +1,5 @@
 // EasyWork - Today View (recording + transcript + minutes)
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Mic, MicOff, ChevronDown, Loader, Sparkles, X, FileAudio } from "lucide-react";
 import Markdown from "../../components/Markdown";
@@ -38,6 +38,34 @@ export default function TodayView({
   const [liveTranscripts, setLiveTranscripts] = useState<{ speaker: string; text: string }[]>([]);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [meetingType, setMeetingType] = useState("其他");
+  const dragStartXRef = useRef(0);
+
+  const handleDragStart = (clientX: number) => {
+    dragStartXRef.current = clientX;
+  };
+  const handleDragEnd = (clientX: number) => {
+    const delta = clientX - dragStartXRef.current;
+    if (Math.abs(delta) > 50) {
+      setCarouselPage(delta > 0 ? 0 : 1);
+    }
+  };
+
+  const speakerColors = [
+    { bg: "#E6EE9C", text: "#5A5F2E" }, { bg: "#FFECB3", text: "#5C4B00" },
+    { bg: "#FFCDD2", text: "#7F2020" }, { bg: "#CE93D8", text: "#4A1A52" },
+    { bg: "#FFAB91", text: "#7F3A1A" }, { bg: "#9E9E9E", text: "#1A1A1A" },
+    { bg: "#9575CD", text: "#2E1A52" }, { bg: "#7986CB", text: "#1A2E52" },
+    { bg: "#BBDEFB", text: "#1A3A5C" }, { bg: "#B2EBF2", text: "#1A4A4A" },
+    { bg: "#80CBC4", text: "#1A3A36" }, { bg: "#A5D6A7", text: "#1A3A1A" },
+    { bg: "#90A4AE", text: "#1A2A30" },
+  ];
+  const getSpeakerStyle = (speaker: string) => {
+    if (speaker === "我") return { bg: "#DBEAFE", text: "#1D4ED8" };
+    if (speaker === "发言人") return { bg: "#F3F4F6", text: "#4B5563" };
+    const n = parseInt(speaker.replace("参会者_", ""), 10);
+    if (isNaN(n)) return { bg: "#F3F4F6", text: "#4B5563" };
+    return speakerColors[(n - 1) % speakerColors.length];
+  };
 
   const loadDevices = useCallback(() => {
     invoke<AudioDevice[]>("list_devices")
@@ -398,7 +426,12 @@ export default function TodayView({
             </div>
 
             {/* Carousel pages */}
-            <div className="flex-1 overflow-hidden relative">
+            <div className="flex-1 overflow-hidden relative select-none"
+              onMouseDown={(e) => handleDragStart(e.clientX)}
+              onMouseUp={(e) => handleDragEnd(e.clientX)}
+              onTouchStart={(e) => handleDragStart(e.touches[0].clientX)}
+              onTouchEnd={(e) => handleDragEnd(e.changedTouches[0].clientX)}
+            >
               <div
                 className="flex h-full transition-transform duration-300 ease-in-out"
                 style={{ transform: `translateX(-${carouselPage * 100}%)` }}
@@ -414,20 +447,20 @@ export default function TodayView({
                     <p className="text-sm text-gray-400">无转写记录</p>
                   ) : (
                     <div className="space-y-3">
-                      {liveTranscripts.map((item, i) => (
-                        <div key={i} className="flex gap-3">
-                          <span className={`shrink-0 mt-0.5 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                            item.speaker === "我"
-                              ? "bg-blue-100 text-blue-700"
-                              : item.speaker === "发言人"
-                              ? "bg-gray-100 text-gray-600"
-                              : "bg-amber-100 text-amber-700"
-                          }`}>
-                            {item.speaker}
-                          </span>
-                          <span className="text-sm text-gray-700">{item.text}</span>
-                        </div>
-                      ))}
+                      {liveTranscripts.map((item, i) => {
+                        const s = getSpeakerStyle(item.speaker);
+                        return (
+                          <div key={i} className="flex gap-3 items-start">
+                            <span
+                              className="shrink-0 inline-flex items-center justify-center rounded-full text-xs font-medium h-6 min-w-[64px] px-3"
+                              style={{ backgroundColor: s.bg, color: s.text }}
+                            >
+                              {item.speaker}
+                            </span>
+                            <span className="text-sm text-gray-700 leading-6">{item.text}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

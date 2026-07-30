@@ -64,21 +64,33 @@ export default function UpdateDialog({ version, body, progress, onInstall, onDis
         )}
 
         <div className="flex justify-end gap-3">
-          <button
-            onClick={onDismiss}
-            disabled={installing || downloading}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40"
-          >
-            {downloading ? "下载中…" : "稍后再说"}
-          </button>
-          <button
-            onClick={handleInstall}
-            disabled={installing || downloading}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {installing ? "安装中…" : downloading ? "下载中…" : "立即更新"}
-          </button>
+          {installing || downloading ? (
+            <div className="flex items-center gap-2 text-sm text-gray-400">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+              {installing ? "正在安装…" : "正在下载…"}
+            </div>
+          ) : (
+            <>
+              <button
+                onClick={onDismiss}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
+              >
+                稍后再说
+              </button>
+              <button
+                onClick={handleInstall}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                立即更新
+              </button>
+            </>
+          )}
         </div>
+        {downloading && (
+          <p className="mt-3 text-xs text-gray-400 text-center">
+            更新包从 GitHub 下载，网络较慢时可能需要几分钟
+          </p>
+        )}
       </div>
     </div>
   );
