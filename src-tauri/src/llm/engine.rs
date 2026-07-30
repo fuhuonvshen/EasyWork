@@ -48,6 +48,9 @@ pub struct LlmEngine {
     downloaded_bytes: AtomicU64,
     total_bytes: AtomicU64,
     download_speed: AtomicU64,
+
+    // Idle tracking for auto-shutdown
+    last_used: Arc<Mutex<std::time::Instant>>,
 }
 
 impl LlmEngine {
@@ -70,6 +73,7 @@ impl LlmEngine {
             downloaded_bytes: AtomicU64::new(0),
             total_bytes: AtomicU64::new(0),
             download_speed: AtomicU64::new(0),
+            last_used: Arc::new(Mutex::new(std::time::Instant::now())),
         }
     }
 
@@ -275,6 +279,26 @@ impl LlmEngine {
                 Ok(resp) if resp.status().is_success() => {
                     log::info!("llama-server ready (model: {})", model_name);
                     *self.current_model.write().await = Some(model_name.to_string());
+                    // Reset idle timer and spawn auto-shutdown watcher
+                    *self.last_used.lock().unwrap() = std::time::Instant::now();
+                    let proc_clone = self.server_process.clone();
+                    let idle_clone = self.last_used.clone();
+                    tokio::spawn(async move {
+                        loop {
+                            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                            let elapsed = idle_clone.lock().unwrap().elapsed();
+                            if elapsed > std::time::Duration::from_secs(600) {
+                                // Take child outside the lock so MutexGuard is dropped before .await
+                                let child = proc_clone.lock().ok().and_then(|mut p| p.take());
+                                if let Some(mut c) = child {
+                                    let _ = c.start_kill();
+                                    let _ = c.wait().await;
+                                    log::info!("llama-server auto-stopped (idle {}s)", elapsed.as_secs());
+                                }
+                                break;
+                            }
+                        }
+                    });
                     return Ok(());
                 }
                 _ => tokio::time::sleep(std::time::Duration::from_millis(500)).await,
@@ -490,6 +514,7 @@ impl LlmEngine {
         system_prompt: &str,
         user_prompt: &str,
     ) -> Result<String> {
+        *self.last_used.lock().unwrap() = std::time::Instant::now();
         if !self.is_server_healthy().await {
             return Err(anyhow::anyhow!("llama-server 未运行，请先加载模型"));
         }
