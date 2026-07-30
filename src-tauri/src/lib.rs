@@ -402,37 +402,42 @@ fn emit_init_status(app_handle: &tauri::AppHandle, module: &str, status: &str, m
 
 async fn ensure_vad_model(app_dir: &std::path::Path, app_handle: &tauri::AppHandle) {
     let dest = app_dir.join("silero_vad.onnx");
-    if dest.exists() {
-        log::info!("Silero VAD model ready");
-        return;
-    }
-    // Try local models/ directory (dev tree)
-    let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let local = manifest_dir.join("models").join("silero_vad.onnx");
-    if local.exists() {
-        if let Err(e) = std::fs::copy(&local, &dest) {
-            log::error!("复制 Silero VAD 模型失败: {}", e);
-        } else {
-            log::info!("Silero VAD model copied from src-tauri/models/");
+    // Check if a valid copy already exists (must be at least 1 MB)
+    if let Ok(meta) = std::fs::metadata(&dest) {
+        if meta.len() > 1_000_000 {
+            log::info!("Silero VAD model ready");
             return;
         }
+        log::warn!("Silero VAD 模型文件异常 ({} bytes)，重新下载", meta.len());
+        let _ = std::fs::remove_file(&dest);
     }
-    // Download from GitHub (release build)
+    // Download from multiple sources
     log::info!("Downloading Silero VAD model (~2 MB)...");
-    let url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx";
-    match reqwest::get(url).await {
-        Ok(resp) => match resp.bytes().await {
-            Ok(bytes) => {
-                if let Err(e) = std::fs::write(&dest, &bytes) {
-                    log::error!("写入 Silero VAD 模型失败: {}", e);
-                } else {
-                    log::info!("Silero VAD 模型已下载 ({:.1} KB)", bytes.len() as f64 / 1024.0);
+    let urls = [
+        "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
+        "https://hf-mirror.com/snakers4/silero-vad/resolve/main/files/silero_vad.onnx",
+    ];
+    for url in &urls {
+        match reqwest::get(*url).await {
+            Ok(resp) => match resp.bytes().await {
+                Ok(bytes) => {
+                    if bytes.len() < 1_000_000 {
+                        log::warn!("{} 返回的文件太小 ({} bytes)，跳过", url, bytes.len());
+                        continue;
+                    }
+                    if let Err(e) = std::fs::write(&dest, &bytes) {
+                        log::error!("写入 Silero VAD 模型失败: {}", e);
+                    } else {
+                        log::info!("Silero VAD 模型已下载 ({:.1} MB)", bytes.len() as f64 / 1_048_576.0);
+                        return;
+                    }
                 }
-            }
-            Err(e) => log::error!("读取 Silero VAD 响应失败: {}", e),
-        },
-        Err(e) => log::warn!("下载 Silero VAD 模型失败 (转录将不可用): {}", e),
+                Err(e) => log::error!("读取 {} 响应失败: {}", url, e),
+            },
+            Err(e) => log::warn!("{} 下载失败: {}", url, e),
+        }
     }
+    log::error!("所有 Silero VAD 下载源均失败，转录将不可用");
 }
 
 // ── Cleanup ──────────────────────────────────────────────────
