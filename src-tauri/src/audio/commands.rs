@@ -16,7 +16,7 @@ pub fn list_devices() -> Result<Vec<AudioDevice>, String> {
 }
 
 #[tauri::command]
-pub fn start_capture(
+pub async fn start_capture(
     device_name: String,
     label: String,
     capture_state: State<'_, CaptureState>,
@@ -28,10 +28,12 @@ pub fn start_capture(
     db: State<'_, DbState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
-    let mut guard = capture_state.0.lock().map_err(|e| format!("状态锁失败: {}", e))?;
-
-    if guard.is_some() {
-        return Err("已有录制正在进行".into());
+    // Lock scope: check no capture is running, then release before any .await
+    {
+        let guard = capture_state.0.lock().map_err(|e| format!("状态锁失败: {}", e))?;
+        if guard.is_some() {
+            return Err("已有录制正在进行".into());
+        }
     }
 
     let app_data_dir = app
@@ -40,11 +42,9 @@ pub fn start_capture(
         .map_err(|e| format!("无法获取应用数据目录: {}", e))?;
 
     // 读取所有设置，用于 resolve_path（支持 data_root_dir + 旧版单独设置）
-    let settings = tauri::async_runtime::block_on(async {
-        crate::database::repo::get_all_settings(&db.0)
-            .await
-            .unwrap_or_default()
-    });
+    let settings = crate::database::repo::get_all_settings(&db.0)
+        .await
+        .unwrap_or_default();
     let output_dir = crate::settings::resolve_path(
         &app_data_dir, &settings, "recordings_dir", "recordings",
     );
@@ -69,14 +69,28 @@ pub fn start_capture(
         let wg = whisper_state.0.lock().map_err(|e| format!("状态锁失败: {}", e))?;
         wg.as_ref().ok_or("Whisper 引擎未初始化")?.clone()
     };
+
+    // Auto-load ASR model: prefer SenseVoice (better Chinese accuracy), fallback to Whisper
     let sv_engine = {
         let sv = sensevoice_state.0.lock().map_err(|e| format!("状态锁失败: {}", e))?;
-        sv.as_ref().and_then(|e| {
-            let loaded = tauri::async_runtime::block_on(e.is_loaded());
-            if loaded { Some(e.clone()) } else { None }
-        })
+        sv.clone()
     };
-    let use_sensevoice = sv_engine.is_some();
+
+    let use_sensevoice = if let Some(ref sv) = sv_engine {
+        if !sv.is_loaded().await {
+            let _ = sv.ensure_model_loaded().await;
+        }
+        sv.is_loaded().await
+    } else {
+        false
+    };
+
+    if !use_sensevoice {
+        if !whisper_engine.is_loaded().await {
+            let _ = whisper_engine.ensure_model_loaded().await;
+        }
+    }
+    let sv_engine = if use_sensevoice { sv_engine } else { None };
     log::info!("Transcription engine: {}", if use_sensevoice { "SenseVoice" } else { "Whisper" });
 
     // Read diarization engine (optional — fall back to fixed labels if unavailable)
@@ -255,7 +269,10 @@ pub fn start_capture(
         *tg = vec![handle1, handle2];
     }
 
-    *guard = Some(capture);
+    {
+        let mut guard = capture_state.0.lock().map_err(|e| format!("状态锁失败: {}", e))?;
+        *guard = Some(capture);
+    }
     Ok(())
 }
 
