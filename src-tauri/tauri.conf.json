@@ -29,7 +29,8 @@
     "active": true,
     "targets": "all",
     "resources": [
-      "binaries/easywork-agent*"
+      "binaries/easywork-agent*",
+      "models/silero_vad.onnx"
     ],
     "macOS": {
       "minimumSystemVersion": "10.15",

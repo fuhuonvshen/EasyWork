@@ -281,7 +281,10 @@ async fn init_background(app_handle: &tauri::AppHandle, app_dir: &std::path::Pat
         }
     }
 
-    // 3. Speaker diarization engine (auto-downloads model if missing)
+    // 3. Silero VAD model (bundled in release, copied from resources or dev dir)
+    ensure_vad_model(&app_dir, app_handle).await;
+
+    // 4. Speaker diarization engine (auto-downloads model if missing)
     let diarize_dir = app_dir.join("speaker_embedding");
     match diarization::ensure_model_downloaded(&diarize_dir).await {
         Ok(model_path) => {
@@ -308,7 +311,7 @@ async fn init_background(app_handle: &tauri::AppHandle, app_dir: &std::path::Pat
         }
     }
 
-    // 4. LLM engine
+    // 5. LLM engine
     let llm_dir = settings::resolve_path(&app_dir, &settings, "llm_models_dir", "llm_models");
     let bin_dir = settings::resolve_path(&app_dir, &settings, "", "bin");
     let resource_dir = app_handle.path().resource_dir().ok();
@@ -394,6 +397,41 @@ fn emit_init_status(app_handle: &tauri::AppHandle, module: &str, status: &str, m
     }));
 }
 
+// ── Silero VAD model ─────────────────────────────────────────
+// The model is small (~2 MB) and bundled in the release.
+
+async fn ensure_vad_model(app_dir: &std::path::Path, app_handle: &tauri::AppHandle) {
+    let dest = app_dir.join("silero_vad.onnx");
+    if dest.exists() {
+        log::info!("Silero VAD model ready");
+        return;
+    }
+    // Try resource dir first (release build)
+    if let Ok(res_dir) = app_handle.path().resource_dir() {
+        let src = res_dir.join("models").join("silero_vad.onnx");
+        if src.exists() {
+            if let Err(e) = std::fs::copy(&src, &dest) {
+                log::error!("复制 Silero VAD 模型失败: {}", e);
+            } else {
+                log::info!("Silero VAD model copied from bundle");
+                return;
+            }
+        }
+    }
+    // Fallback: dev tree (src-tauri/models/)
+    let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let dev_src = manifest_dir.join("models").join("silero_vad.onnx");
+    if dev_src.exists() {
+        if let Err(e) = std::fs::copy(&dev_src, &dest) {
+            log::error!("复制 Silero VAD 模型(dev)失败: {}", e);
+        } else {
+            log::info!("Silero VAD model copied from dev tree");
+        }
+    } else {
+        log::warn!("Silero VAD 模型未找到，转录将不可用");
+    }
+}
+
 // ── Cleanup ──────────────────────────────────────────────────
 
 fn cleanup_child_process(app_handle: &tauri::AppHandle) {
@@ -406,6 +444,16 @@ fn cleanup_child_process(app_handle: &tauri::AppHandle) {
             }
         }
         Err(e) => log::error!("cleanup: 无法获取 AgentProcessState 锁: {:?}", e),
+    }
+
+    // Windows fallback: kill all easywork-agent.exe processes (PyInstaller
+    // bootstrap exits early, so the tracked Child handle may not cover the
+    // actual Python process tree).
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(&["/f", "/im", "easywork-agent.exe"])
+            .output();
     }
 
     // Close database pool (fire-and-forget; SQLite 已提交事务是 crash-safe 的)
