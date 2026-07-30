@@ -8,6 +8,7 @@ import MinutesSidebar from "./components/MinutesSidebar";
 import MeetingListView from "./history/MeetingListView";
 import ReportList from "./reports/ReportList";
 import ReportViewModal from "./reports/ReportViewModal";
+import MeetingModelCheck from "./components/MeetingModelCheck";
 import type { MinutesTab, ReportItem } from "../types";
 
 export default function MinutesApp({
@@ -49,6 +50,7 @@ export default function MinutesApp({
   };
 
   return (
+    <MeetingModelCheck>
     <div className="flex h-full">
       <MinutesSidebar
         tab={tab}
@@ -110,5 +112,6 @@ export default function MinutesApp({
         />
       )}
     </div>
+    </MeetingModelCheck>
   );
 }

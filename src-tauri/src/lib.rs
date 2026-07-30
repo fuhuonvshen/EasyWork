@@ -155,6 +155,7 @@ pub fn run() {
             audio::commands::start_capture,
             audio::commands::stop_capture,
             audio::commands::get_transcript_chunks,
+            audio::commands::check_meeting_models,
             // ── Whisper ──
             whisper::commands::whisper_check_model,
             whisper::commands::whisper_list_models,
@@ -289,7 +290,7 @@ async fn init_background(app_handle: &tauri::AppHandle, app_dir: &std::path::Pat
 
     // 4. Speaker diarization engine (auto-downloads model if missing)
     let diarize_dir = app_dir.join("speaker_embedding");
-    match diarization::ensure_model_downloaded(&diarize_dir).await {
+    match diarization::ensure_model_downloaded(&diarize_dir, app_handle).await {
         Ok(model_path) => {
             match diarization::DiarizationEngine::new(&model_path) {
                 Ok(engine) => {
@@ -412,7 +413,6 @@ fn emit_init_status(app_handle: &tauri::AppHandle, module: &str, status: &str, m
 
 async fn ensure_vad_model(app_dir: &std::path::Path, app_handle: &tauri::AppHandle) {
     let dest = app_dir.join("silero_vad.onnx");
-    // Check if a valid copy already exists
     if let Ok(meta) = std::fs::metadata(&dest) {
         if meta.len() > 10_000 {
             log::info!("Silero VAD model ready");
@@ -421,29 +421,59 @@ async fn ensure_vad_model(app_dir: &std::path::Path, app_handle: &tauri::AppHand
         log::warn!("Silero VAD 模型文件异常 ({} bytes)，重新下载", meta.len());
         let _ = std::fs::remove_file(&dest);
     }
-    // Download from multiple sources — some versions are ~600 KB, some ~2 MB
+
     log::info!("Downloading Silero VAD model...");
     let urls = [
         "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
         "https://hf-mirror.com/istupakov/silero-vad-onnx/resolve/main/silero_vad.onnx",
     ];
+    let client = reqwest::Client::new();
     for url in &urls {
-        match reqwest::get(*url).await {
-            Ok(resp) => match resp.bytes().await {
-                Ok(bytes) => {
-                    if bytes.len() < 10_000 {
-                        log::warn!("{} 返回的文件太小 ({} bytes)，跳过", url, bytes.len());
-                        continue;
-                    }
-                    if let Err(e) = std::fs::write(&dest, &bytes) {
-                        log::error!("写入 Silero VAD 模型失败: {}", e);
-                    } else {
-                        log::info!("Silero VAD 模型已下载 ({:.1} MB)", bytes.len() as f64 / 1_048_576.0);
-                        return;
+        match client.get(*url).send().await {
+            Ok(resp) => {
+                let total = resp.content_length().unwrap_or(0);
+                let mut downloaded: u64 = 0;
+                let mut stream = resp.bytes_stream();
+                let mut data: Vec<u8> = Vec::new();
+                let mut last_pct: u8 = 0;
+
+                use futures_util::StreamExt;
+                while let Some(chunk) = stream.next().await {
+                    match chunk {
+                        Ok(bytes) => {
+                            data.extend_from_slice(&bytes);
+                            downloaded += bytes.len() as u64;
+                            if total > 0 {
+                                let pct = ((downloaded * 100) / total) as u8;
+                                if pct != last_pct {
+                                    last_pct = pct;
+                                    let _ = app_handle.emit("vad-download-progress", serde_json::json!({
+                                        "progress": pct, "downloadedBytes": downloaded, "totalSize": total,
+                                    }));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            log::warn!("{} 下载中断: {}", url, e);
+                            break;
+                        }
                     }
                 }
-                Err(e) => log::error!("读取 {} 响应失败: {}", url, e),
-            },
+
+                if data.len() < 10_000 {
+                    log::warn!("{} 返回的文件太小 ({} bytes)，跳过", url, data.len());
+                    continue;
+                }
+                if let Err(e) = std::fs::write(&dest, &data) {
+                    log::error!("写入 Silero VAD 模型失败: {}", e);
+                } else {
+                    let _ = app_handle.emit("vad-download-progress", serde_json::json!({
+                        "progress": 100, "downloadedBytes": data.len(), "totalSize": data.len(),
+                    }));
+                    log::info!("Silero VAD 模型已下载 ({:.1} MB)", data.len() as f64 / 1_048_576.0);
+                    return;
+                }
+            }
             Err(e) => log::warn!("{} 下载失败: {}", url, e),
         }
     }

@@ -3,18 +3,19 @@
 // 对 VAD 切割出的每个语音段提取声纹 embedding，通过与已知说话人比对来区分身份。
 
 use anyhow::{Context, Result};
+use futures_util::StreamExt;
 use sherpa_onnx::{
     SpeakerEmbeddingExtractor, SpeakerEmbeddingExtractorConfig, SpeakerEmbeddingManager,
 };
 use std::path::{Path, PathBuf};
+use tauri::Emitter;
 
-/// 中文声纹模型（eres2net，专为中文说话人识别优化，~20MB）
+/// 中文声纹模型（eres2net，专为中文说话人识别优化，~52MB）
 const DIARIZATION_MODEL: &str = "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k";
 
-/// HuggingFace 镜像下载地址
+/// 下载地址（GitHub Releases，sherpa-onnx 官方分发）
 const DOWNLOAD_URLS: &[&str] = &[
-    "https://hf-mirror.com/csukuangfj",
-    "https://huggingface.co/csukuangfj",
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models",
 ];
 
 /// 说话人区分引擎。
@@ -118,7 +119,7 @@ impl DiarizationEngine {
 }
 
 // ── Model download ─────────────────────────────────────────────
-pub async fn ensure_model_downloaded(models_dir: &Path) -> Result<PathBuf> {
+pub async fn ensure_model_downloaded(models_dir: &Path, app_handle: &tauri::AppHandle) -> Result<PathBuf> {
     let model_dir = models_dir.join(DIARIZATION_MODEL);
     let model_path = model_dir.join("model.onnx");
 
@@ -132,10 +133,7 @@ pub async fn ensure_model_downloaded(models_dir: &Path) -> Result<PathBuf> {
 
     let mut downloaded = false;
     for base_url in DOWNLOAD_URLS {
-        let url = format!(
-            "{}/{}/resolve/main/model.onnx",
-            base_url, DIARIZATION_MODEL
-        );
+        let url = format!("{}/{}.onnx", base_url, DIARIZATION_MODEL);
         log::info!("正在下载声纹模型: {}", url);
 
         let client = reqwest::Client::builder()
@@ -145,11 +143,33 @@ pub async fn ensure_model_downloaded(models_dir: &Path) -> Result<PathBuf> {
 
         match client.get(&url).send().await {
             Ok(response) if response.status().is_success() => {
-                let data = response.bytes().await
-                    .context("下载声纹模型失败")?;
+                let total = response.content_length().unwrap_or(0);
+                let mut stream = response.bytes_stream();
+                let mut data: Vec<u8> = Vec::new();
+                let mut downloaded_bytes: u64 = 0;
+                let mut last_pct: u8 = 0;
+
+                while let Some(chunk) = stream.next().await {
+                    let chunk = chunk.context("下载声纹模型中断")?;
+                    data.extend_from_slice(&chunk);
+                    downloaded_bytes += chunk.len() as u64;
+                    if total > 0 {
+                        let pct = ((downloaded_bytes * 100) / total) as u8;
+                        if pct != last_pct {
+                            last_pct = pct;
+                            let _ = app_handle.emit("diarization-download-progress", serde_json::json!({
+                                "progress": pct, "downloadedBytes": downloaded_bytes, "totalSize": total,
+                            }));
+                        }
+                    }
+                }
+
                 std::fs::write(&model_path, &data)
                     .context("写入声纹模型文件失败")?;
                 downloaded = true;
+                let _ = app_handle.emit("diarization-download-progress", serde_json::json!({
+                    "progress": 100, "downloadedBytes": data.len(), "totalSize": data.len(),
+                }));
                 log::info!("声纹模型下载完成: {:.1}MB", data.len() as f64 / 1_000_000.0);
                 break;
             }
@@ -165,7 +185,6 @@ pub async fn ensure_model_downloaded(models_dir: &Path) -> Result<PathBuf> {
     }
 
     if !downloaded {
-        // 下载失败不阻止启动，只是不说话人区分
         anyhow::bail!("无法下载声纹模型，说话人区分功能不可用");
     }
 

@@ -1,6 +1,6 @@
 // EasyWork - Audio capture commands
 
-use tauri::{Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use crate::audio::capture::{AudioCapture, CaptureConfig};
 use crate::audio::device::{list_output_devices, AudioDevice};
 use crate::diarization::DiarizationEngine;
@@ -301,4 +301,27 @@ pub fn get_transcript_chunks(
     let mut guard = state.0.lock().map_err(|e| format!("状态锁失败: {}", e))?;
     let chunks: Vec<serde_json::Value> = guard.drain(..).collect();
     Ok(chunks)
+}
+
+/// Check whether the VAD and diarization models are ready for recording.
+/// Frontend calls this when entering the meeting module to decide whether to show a download dialog.
+#[tauri::command]
+pub fn check_meeting_models(app: AppHandle) -> Result<serde_json::Value, String> {
+    let app_dir = app.path().app_data_dir().map_err(|e| format!("{:?}", e))?;
+
+    let vad_path = app_dir.join("silero_vad.onnx");
+    let vad_ready = std::fs::metadata(&vad_path)
+        .map(|m| m.len() > 10_000)
+        .unwrap_or(false);
+
+    let diar_path = app_dir.join("speaker_embedding")
+        .join("3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k")
+        .join("model.onnx");
+    let diarization_ready = diar_path.exists();
+
+    Ok(serde_json::json!({
+        "vadReady": vad_ready,
+        "diarizationReady": diarization_ready,
+        "bothReady": vad_ready && diarization_ready,
+    }))
 }
