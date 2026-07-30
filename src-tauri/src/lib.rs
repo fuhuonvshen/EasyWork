@@ -17,7 +17,7 @@ mod whisper;
 mod state;
 
 use state::{
-    AgentProcessState, AgentSidecarState, CaptureState, DbState, DiarizationState, KillOnDrop,
+    AgentProcessState, AgentSidecarState, CaptureState, ChildProcesses, DbState, DiarizationState, KillOnDrop,
     LlmState, ReminderState, SenseVoiceState, TranscriptBufState, TranscriptTaskState, WhisperState,
 };
 use std::collections::HashMap;
@@ -84,6 +84,9 @@ pub fn run() {
         .manage(AgentSidecarState(agent::sidecar::AgentSidecar::new(9876)))
         .manage(AgentProcessState(std::sync::Arc::new(
             std::sync::Mutex::new(KillOnDrop(None)),
+        )))
+        .manage(ChildProcesses(std::sync::Arc::new(
+            std::sync::Mutex::new(Vec::new()),
         )))
         .setup(|app| {
             let app_dir = match app.path().app_data_dir() {
@@ -370,9 +373,16 @@ async fn start_agent_sidecar(app_handle: &tauri::AppHandle, app_dir: &std::path:
 
     match agent::init(&project_dir, &manifest_dir, &db_path, port, settings, bundled_agent.as_deref()).await {
         Ok((_, Some(child))) => {
+            let pid = child.id();
             match app_handle.state::<AgentProcessState>().0.try_lock() {
                 Ok(mut guard) => guard.0 = Some(child),
                 Err(e) => log::error!("无法获取 AgentProcessState 锁: {:?}", e),
+            }
+            if let Some(pid) = pid {
+                if let Ok(mut reg) = app_handle.state::<ChildProcesses>().0.try_lock() {
+                    reg.push(pid);
+                    log::info!("Agent 子进程 PID: {}", pid);
+                }
             }
             emit_init_status(app_handle, "agent", "ok", &format!("Agent sidecar 就绪 (端口 {})", port));
             log::info!("Agent sidecar initialized on port {}", port);
@@ -443,28 +453,70 @@ async fn ensure_vad_model(app_dir: &std::path::Path, app_handle: &tauri::AppHand
 // ── Cleanup ──────────────────────────────────────────────────
 
 fn cleanup_child_process(app_handle: &tauri::AppHandle) {
-    // Kill agent sidecar process
-    match app_handle.state::<AgentProcessState>().0.try_lock() {
-        Ok(mut guard) => {
-            if let Some(mut child) = guard.0.take() {
-                let _ = child.start_kill();
-                log::info!("Agent 子进程已终止");
+    // Kill tracked agent sidecar handle (stops the tracked Child)
+    if let Ok(mut guard) = app_handle.state::<AgentProcessState>().0.try_lock() {
+        if let Some(mut child) = guard.0.take() {
+            let _ = child.start_kill();
+        }
+    }
+
+    // Collect all PIDs to clean up
+    let mut pids: Vec<u32> = Vec::new();
+
+    // 1. From the ChildProcesses registry (agent sidecar)
+    if let Ok(mut reg) = app_handle.state::<ChildProcesses>().0.try_lock() {
+        pids.extend(reg.drain(..));
+    }
+
+    // 2. From LlmState (llama-server)
+    if let Some(llm_state) = app_handle.try_state::<LlmState>() {
+        if let Ok(engine) = llm_state.0.try_read() {
+            if let Some(pid) = engine.server_pid() {
+                pids.push(pid);
             }
         }
-        Err(e) => log::error!("cleanup: 无法获取 AgentProcessState 锁: {:?}", e),
     }
 
-    // Windows fallback: kill all easywork-agent.exe processes (PyInstaller
-    // bootstrap exits early, so the tracked Child handle may not cover the
-    // actual Python process tree).
+    pids.dedup();
+
     #[cfg(target_os = "windows")]
     {
-        let _ = std::process::Command::new("taskkill")
-            .args(&["/f", "/im", "easywork-agent.exe"])
-            .output();
+        use std::os::windows::process::CommandExt;
+        let flags = 0x08000000u32; // CREATE_NO_WINDOW
+
+        // Step 1: Graceful shutdown — taskkill without /f sends WM_CLOSE
+        for &pid in &pids {
+            let _ = std::process::Command::new("taskkill")
+                .creation_flags(flags)
+                .args(&["/pid", &pid.to_string()])
+                .output();
+        }
+
+        // Step 2: Wait for processes to exit
+        if !pids.is_empty() {
+            std::thread::sleep(std::time::Duration::from_secs(3));
+        }
+
+        // Step 3: Force kill any remaining by PID
+        for &pid in &pids {
+            let _ = std::process::Command::new("taskkill")
+                .creation_flags(flags)
+                .args(&["/f", "/pid", &pid.to_string()])
+                .output();
+        }
+
+        // Step 4: Ultimate fallback — force-kill by name (catch orphans)
+        for exe in &["easywork-agent.exe", "llama-server.exe"] {
+            let _ = std::process::Command::new("taskkill")
+                .creation_flags(flags)
+                .args(&["/f", "/im", exe])
+                .output();
+        }
     }
 
-    // Close database pool (fire-and-forget; SQLite 已提交事务是 crash-safe 的)
+    log::info!("所有子进程已清理");
+
+    // Close database pool (fire-and-forget; SQLite commits are crash-safe)
     let pool = &app_handle.state::<DbState>().0;
     tauri::async_runtime::spawn({
         let pool = pool.clone();

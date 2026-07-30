@@ -584,6 +584,12 @@ impl LlmEngine {
         let current = self.current_model.try_read().map(|g| g.clone()).ok().flatten();
         models::list_models(&self.models_dir, current.as_deref())
     }
+
+    /// Get the PID of the running llama-server process, if any.
+    pub fn server_pid(&self) -> Option<u32> {
+        self.server_process.lock().ok()
+            .and_then(|proc| proc.as_ref()?.id())
+    }
 }
 
 impl Drop for LlmEngine {

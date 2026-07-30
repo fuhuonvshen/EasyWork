@@ -32,3 +32,5 @@ impl Drop for KillOnDrop {
     }
 }
 pub struct AgentProcessState(pub std::sync::Arc<std::sync::Mutex<KillOnDrop>>);
+/// Registry of all child process PIDs for reliable cleanup on exit.
+pub struct ChildProcesses(pub std::sync::Arc<std::sync::Mutex<Vec<u32>>>);
