@@ -110,9 +110,13 @@ pub fn system_prompt(meeting_type: &str) -> String {
 
 /// Construct the user prompt that combines the system instructions with the transcript.
 pub fn user_prompt(transcript: &str, meeting_title: &str) -> String {
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
     let mut s = String::new();
     s.push_str("会议名称: ");
     s.push_str(meeting_title);
+    s.push('\n');
+    s.push_str("会议时间: ");
+    s.push_str(&now);
     s.push('\n');
     s.push('\n');
     s.push_str("以下是本次会议的语音转写内容:");

@@ -98,8 +98,9 @@ pub async fn start_capture(
         let guard = diarization_state.0.lock().map_err(|e| format!("状态锁失败: {}", e))?;
         guard.clone()
     };
-    if diarize_engine.is_some() {
-        log::info!("说话人区分引擎已接入");
+    if let Some(ref engine) = diarize_engine {
+        engine.reset();  // Reset speaker registry for new meeting
+        log::info!("说话人区分引擎已接入（已重置）");
     } else {
         log::info!("说话人区分引擎未启用，将使用固定标签");
     }

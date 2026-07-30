@@ -87,8 +87,8 @@ impl DiarizationEngine {
             return None;
         }
 
-        // 阈值 0.6：平衡准确率和召回率
-        const THRESHOLD: f32 = 0.6;
+        // 阈值 0.5：平衡准确率和召回率，对 AI 合成语音适应性更好
+        const THRESHOLD: f32 = 0.5;
 
         if let Some(name) = self.manager.search(&embedding, THRESHOLD) {
             log::debug!("说话人匹配: {} (score >= {})", name, THRESHOLD);

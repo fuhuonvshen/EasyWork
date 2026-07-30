@@ -33,6 +33,7 @@ export default function TodayView({
   const [minutes, setMinutes] = useState<string | null>(null);
   const [currentMeetingId, setCurrentMeetingId] = useState<string | null>(null);
   const [showMinutes, setShowMinutes] = useState(false);
+  const [carouselPage, setCarouselPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [liveTranscripts, setLiveTranscripts] = useState<{ speaker: string; text: string }[]>([]);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
@@ -133,6 +134,7 @@ export default function TodayView({
       setCurrentMeetingId(result.meetingId);
       setMinutes(result.content);
       setShowMinutes(true);
+      setCarouselPage(0);
       setGenerating(false);
       onGeneratingChange(false);
       onMeetingCreated();
@@ -182,6 +184,7 @@ export default function TodayView({
       setCurrentMeetingId(result.meetingId);
       setMinutes(result.content);
       setShowMinutes(true);
+      setCarouselPage(0);
       setGenerating(false);
       onGeneratingChange(false);
       onMeetingCreated();
@@ -377,7 +380,7 @@ export default function TodayView({
         </div>
       </div>
 
-      {/* Minutes result modal */}
+      {/* Minutes result modal — carousel: summary / transcript */}
       {showMinutes && minutes && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] mx-4 flex flex-col">
@@ -393,8 +396,61 @@ export default function TodayView({
                 <X size={18} />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto px-6 py-4">
-              <Markdown content={minutes} />
+
+            {/* Carousel pages */}
+            <div className="flex-1 overflow-hidden relative">
+              <div
+                className="flex h-full transition-transform duration-300 ease-in-out"
+                style={{ transform: `translateX(-${carouselPage * 100}%)` }}
+              >
+                {/* Page 1: Summary */}
+                <div className="min-w-full h-full overflow-y-auto px-6 py-4">
+                  <Markdown content={minutes} />
+                </div>
+
+                {/* Page 2: Transcript with speaker labels */}
+                <div className="min-w-full h-full overflow-y-auto px-6 py-4">
+                  {liveTranscripts.length === 0 ? (
+                    <p className="text-sm text-gray-400">无转写记录</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {liveTranscripts.map((item, i) => (
+                        <div key={i} className="flex gap-3">
+                          <span className={`shrink-0 mt-0.5 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                            item.speaker === "我"
+                              ? "bg-blue-100 text-blue-700"
+                              : item.speaker === "发言人"
+                              ? "bg-gray-100 text-gray-600"
+                              : "bg-amber-100 text-amber-700"
+                          }`}>
+                            {item.speaker}
+                          </span>
+                          <span className="text-sm text-gray-700">{item.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Carousel dots */}
+            <div className="flex items-center justify-center gap-2 px-6 py-3 border-t border-gray-100">
+              <button
+                onClick={() => setCarouselPage(0)}
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  carouselPage === 0 ? "w-6 bg-blue-500" : "w-2 bg-gray-300 hover:bg-gray-400"
+                }`}
+              />
+              <button
+                onClick={() => setCarouselPage(1)}
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  carouselPage === 1 ? "w-6 bg-blue-500" : "w-2 bg-gray-300 hover:bg-gray-400"
+                }`}
+              />
+              <span className="ml-2 text-xs text-gray-400">
+                {carouselPage === 0 ? "会议总结" : "转写记录"}
+              </span>
             </div>
           </div>
         </div>

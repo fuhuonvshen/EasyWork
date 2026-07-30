@@ -12,7 +12,7 @@ interface ModelStatus {
 }
 
 export default function MeetingModelCheck({ children }: { children: React.ReactNode }) {
-  const [show, setShow] = useState(true);
+  const [initialized, setInitialized] = useState(false);
   const [status, setStatus] = useState<ModelStatus>({
     vadReady: false,
     diarizationReady: false,
@@ -26,8 +26,10 @@ export default function MeetingModelCheck({ children }: { children: React.ReactN
         "check_meeting_models"
       );
       setStatus((s) => ({ ...s, vadReady: res.vadReady, diarizationReady: res.diarizationReady }));
-      if (res.bothReady) setShow(false);
-    } catch {}
+      setInitialized(true);
+    } catch {
+      setInitialized(true);
+    }
   };
 
   useEffect(() => {
@@ -56,14 +58,10 @@ export default function MeetingModelCheck({ children }: { children: React.ReactN
     };
   }, []);
 
-  // Close dialog when both models are ready
-  useEffect(() => {
-    if (status.vadReady && status.diarizationReady) {
-      setShow(false);
-    }
-  }, [status.vadReady, status.diarizationReady]);
-
-  if (!show) return <>{children}</>;
+  // All models ready → render children immediately (no flash)
+  if (initialized && status.vadReady && status.diarizationReady) return <>{children}</>;
+  // Before first check completes → show nothing (avoid flash)
+  if (!initialized) return <>{children}</>;
 
   const bothDone = status.vadReady && status.diarizationReady;
 
