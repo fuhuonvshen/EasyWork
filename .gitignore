@@ -34,6 +34,9 @@ Thumbs.db
 # Claude Code local state (settings, memories, worktrees)
 .claude/
 
+# docs
+docs/
+
 # Build logs
 build_errors.txt
 src-tauri/agent_debug.log

@@ -287,7 +287,7 @@ impl LlmEngine {
                         loop {
                             tokio::time::sleep(std::time::Duration::from_secs(60)).await;
                             let elapsed = idle_clone.lock().unwrap().elapsed();
-                            if elapsed > std::time::Duration::from_secs(600) {
+                            if elapsed > std::time::Duration::from_secs(300) {
                                 // Take child outside the lock so MutexGuard is dropped before .await
                                 let child = proc_clone.lock().ok().and_then(|mut p| p.take());
                                 if let Some(mut c) = child {
