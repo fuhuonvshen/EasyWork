@@ -45,7 +45,31 @@ impl AudioCapture {
     pub fn start(config: CaptureConfig) -> Result<Self> {
         let host = cpal::default_host();
 
-        // Try output (loopback) device first
+        // macOS: CoreAudio 不支持输出设备回环捕获，直接使用麦克风输入
+        #[cfg(target_os = "macos")]
+        let (device, supported_config) = {
+            let dev = if let Some(d) = host
+                .input_devices()
+                .ok()
+                .and_then(|mut ds| ds.find(|d| {
+                    d.name().map(|n| n == config.device_name).unwrap_or(false)
+                }))
+            {
+                log::info!("Found input device: {}", config.device_name);
+                d
+            } else {
+                let d = host.default_input_device()
+                    .context("未找到音频设备")?;
+                log::info!("Using default input device (mic)");
+                d
+            };
+            let cfg = dev.default_input_config()
+                .context("无法获取输入配置")?;
+            (dev, cfg)
+        };
+
+        // Windows: WASAPI 回环捕获输出设备
+        #[cfg(not(target_os = "macos"))]
         let (device, supported_config) = if let Some(dev) = host
             .output_devices()
             .ok()
@@ -134,6 +158,8 @@ impl AudioCapture {
         let mut streams = vec![stream];
 
         // ── Mic stream ────────────────────────────────────
+        // macOS 主设备已是麦克风，无需单独麦克风流
+        #[cfg(not(target_os = "macos"))]
         if let Some(mic) = host.default_input_device() {
             if let Ok(mic_cfg) = mic.default_input_config() {
                 let mic_name = mic.name().unwrap_or_default();
@@ -216,6 +242,22 @@ impl AudioCapture {
                             else if sum < -1.0 { -1.0 + (sum + 1.0) * 0.1 }
                             else { sum };
                         let _ = writer.write_sample(mixed);
+                        total_written += 1;
+                    }
+                }
+                // macOS: 无麦克风流 → 只写主设备数据
+                while sys_queue.len() >= window_size && mic_queue.is_empty() {
+                    let win: Vec<f32> = sys_queue.drain(..window_size).collect();
+                    for &s in &win {
+                        let _ = writer.write_sample(s.clamp(-1.0, 1.0));
+                        total_written += 1;
+                    }
+                }
+                // 反向兜底：只有麦克风数据
+                while mic_queue.len() >= window_size && sys_queue.is_empty() {
+                    let win: Vec<f32> = mic_queue.drain(..window_size).collect();
+                    for &m in &win {
+                        let _ = writer.write_sample(m.clamp(-1.0, 1.0));
                         total_written += 1;
                     }
                 }

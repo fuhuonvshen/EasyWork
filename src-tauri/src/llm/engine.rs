@@ -158,46 +158,135 @@ impl LlmEngine {
             .context("创建二进制目录失败")?;
 
         let tag = "b10034";
-        let platform = if cfg!(target_os = "windows") {
-            if self.gpu_layers > 0 { "win-cuda-12.4-x64" } else { "win-cpu-x64" }
-        } else if cfg!(target_os = "macos") { "mac-arm64" }
-        else { "linux-x64" };
-        let zip_name = format!("llama-{tag}-bin-{platform}.zip");
-        let url = format!("https://github.com/ggml-org/llama.cpp/releases/download/{tag}/{zip_name}");
+        // macOS 资产是 .tar.gz，其他平台是 .zip
+        let (platform, is_targz) = if cfg!(target_os = "windows") {
+            (if self.gpu_layers > 0 { "win-cuda-12.4-x64" } else { "win-cpu-x64" }, false)
+        } else if cfg!(target_os = "macos") { ("macos-arm64", true) }
+        else { ("linux-x64", false) };
+        let ext = if is_targz { "tar.gz" } else { "zip" };
 
+        // Try the hardcoded URL first
+        let asset_name = format!("llama-{tag}-bin-{platform}.{}", ext);
+        let url = format!("https://github.com/ggml-org/llama.cpp/releases/download/{tag}/{asset_name}");
+        match self.download_and_extract(&url, is_targz).await {
+            Ok(()) => return Ok(()),
+            Err(e) => log::warn!("固定地址下载失败 ({}), 尝试通过 GitHub API 查找正确资产...", e),
+        }
+
+        // Fallback: query GitHub API for the latest release and find the matching asset
+        let api_url = "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest";
+        let client = reqwest::Client::builder()
+            .user_agent("EasyWork")
+            .build()
+            .context("创建 HTTP 客户端失败")?;
+
+        let resp = client.get(api_url).send().await
+            .context("查询 llama.cpp 最新版本失败")?;
+        if !resp.status().is_success() {
+            anyhow::bail!("GitHub API 返回 {}", resp.status());
+        }
+        let json: serde_json::Value = resp.json().await
+            .context("解析 GitHub API 响应失败")?;
+
+        let tag_new = json["tag_name"].as_str().unwrap_or(tag);
+        let mut found: Option<String> = None;
+        if let Some(assets) = json["assets"].as_array() {
+            for asset in assets {
+                let name = asset["name"].as_str().unwrap_or("");
+                if name.contains(platform) && (name.ends_with(&ext) || name.ends_with(".zip")) {
+                    found = Some(name.to_string());
+                    break;
+                }
+            }
+        }
+
+        let asset_name = found.ok_or_else(|| anyhow::anyhow!(
+            "未在 llama.cpp 最新版本 ({}) 中找到匹配资产 (平台: {})", tag_new, platform
+        ))?;
+        let is_targz = asset_name.ends_with(".tar.gz");
+        let url = format!("https://github.com/ggml-org/llama.cpp/releases/download/{}/{}", tag_new, asset_name);
+        log::info!("通过 GitHub API 找到资产: {}", asset_name);
+        self.download_and_extract(&url, is_targz).await
+    }
+
+    /// Download llama-server archive and extract executable + companion files into bin_dir.
+    /// `is_targz` selects .tar.gz (macOS) vs .zip (Windows/Linux) handling.
+    async fn download_and_extract(&self, url: &str, is_targz: bool) -> Result<()> {
         log::info!("Downloading llama-server from {}", url);
-        let response = reqwest::get(&url)
+        let response = reqwest::get(url)
             .await
             .context("下载 llama-server 失败")?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("HTTP {}", response.status());
+        }
 
         let bytes = response.bytes()
             .await
             .context("读取 llama-server 响应失败")?;
 
-        // Extract the binary from zip (need to save and unzip)
-        let zip_path = self.bin_dir.join(&zip_name);
-        tokio::fs::write(&zip_path, &bytes)
+        let tmp_path = self.bin_dir.join("llama-server-tmp.archive");
+        tokio::fs::write(&tmp_path, &bytes)
             .await
-            .context("保存 zip 文件失败")?;
+            .context("保存下载文件失败")?;
 
-        let file = std::fs::File::open(&zip_path)?;
-        let mut archive = zip::ZipArchive::new(file)
-            .context("解析 zip 文件失败")?;
+        let file = std::fs::File::open(&tmp_path)?;
+        let file_len = bytes.len();
 
-        let exe_name = if cfg!(target_os = "windows") { "llama-server.exe" } else { "llama-server" };
-        for i in 0..archive.len() {
-            let mut entry = archive.by_index(i)?;
-            let name = entry.name().to_string();
-            // Extract exe, DLLs (Windows), or unix binary (macOS/Linux)
-            if name.ends_with(".exe") || name.ends_with(".dll") || name.ends_with("llama-server") {
-                let dst = self.bin_dir.join(&name);
-                let mut out = std::fs::File::create(&dst)?;
-                std::io::copy(&mut entry, &mut out)?;
-                log::info!("Extracted: {}", name);
+        if is_targz {
+            // macOS: tar.gz 格式 — 扁平解压 llama-server + 全部 .dylib 依赖库
+            let gz = flate2::read::GzDecoder::new(file);
+            let mut archive = tar::Archive::new(gz);
+            let mut found = false;
+            for entry in archive.entries().with_context(|| format!("解析 tar.gz 失败 ({} bytes)", file_len))? {
+                let mut entry = entry.context("读取 tar 条目失败")?;
+                if entry.header().entry_type().is_dir() {
+                    continue;
+                }
+                let path = entry.path().context("读取 tar 路径失败")?.to_path_buf();
+                if let Some(name) = path.file_name().map(|n| n.to_string_lossy().to_string()) {
+                    if name == "llama-server" || name.ends_with(".dylib") {
+                        let dst = self.bin_dir.join(&name);
+                        let mut out = std::fs::File::create(&dst)?;
+                        std::io::copy(&mut entry, &mut out)?;
+                        log::info!("Extracted: {}", name);
+                        if name == "llama-server" {
+                            found = true;
+                        }
+                    }
+                }
+            }
+            if !found {
+                anyhow::bail!("tar.gz 中未找到 llama-server 可执行文件");
+            }
+            #[cfg(target_os = "macos")]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let exe = self.bin_dir.join("llama-server");
+                if let Ok(meta) = std::fs::metadata(&exe) {
+                    let mut perms = meta.permissions();
+                    perms.set_mode(0o755);
+                    let _ = std::fs::set_permissions(&exe, perms);
+                }
+            }
+        } else {
+            // Windows/Linux: zip 格式
+            let mut archive = zip::ZipArchive::new(file)
+                .with_context(|| format!("解析 zip 文件失败 ({} bytes)", file_len))?;
+            for i in 0..archive.len() {
+                let mut entry = archive.by_index(i)?;
+                let name = entry.name().to_string();
+                // Extract exe, DLLs (Windows), or unix binary (macOS/Linux)
+                if name.ends_with(".exe") || name.ends_with(".dll") || name.ends_with("llama-server") {
+                    let dst = self.bin_dir.join(&name);
+                    let mut out = std::fs::File::create(&dst)?;
+                    std::io::copy(&mut entry, &mut out)?;
+                    log::info!("Extracted: {}", name);
+                }
             }
         }
 
-        let _ = std::fs::remove_file(&zip_path);
+        let _ = std::fs::remove_file(&tmp_path);
         log::info!("llama-server downloaded & extracted to {:?}", self.bin_dir);
         Ok(())
     }

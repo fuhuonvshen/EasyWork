@@ -15,21 +15,35 @@ pub struct AudioDevice {
     pub is_default: bool,
 }
 
-/// List all available audio output devices (speakers / virtual devices).
-/// On Windows this uses WASAPI, on macOS CoreAudio.
+/// List all available audio devices for capture.
+/// Windows: output devices (WASAPI loopback). macOS: input devices (CoreAudio 不支持回环).
 /// Devices are deduplicated by name and sorted (default first).
 pub fn list_output_devices() -> Result<Vec<AudioDevice>, String> {
     let host = cpal::default_host();
 
+    // macOS 捕获麦克风输入；Windows 捕获输出设备（回环）
+    #[cfg(target_os = "macos")]
+    let default_name = host
+        .default_input_device()
+        .map(|d| d.name().unwrap_or_default())
+        .unwrap_or_default();
+    #[cfg(not(target_os = "macos"))]
     let default_name = host
         .default_output_device()
         .map(|d| d.name().unwrap_or_default())
         .unwrap_or_default();
 
     let mut seen = HashSet::new();
-    let mut devices: Vec<AudioDevice> = host
+    #[cfg(target_os = "macos")]
+    let device_iter = host
+        .input_devices()
+        .map_err(|e| format!("无法枚举音频输入设备: {}", e))?;
+    #[cfg(not(target_os = "macos"))]
+    let device_iter = host
         .output_devices()
-        .map_err(|e| format!("无法枚举音频输出设备: {}", e))?
+        .map_err(|e| format!("无法枚举音频输出设备: {}", e))?;
+
+    let mut devices: Vec<AudioDevice> = device_iter
         .filter_map(|d| {
             let name = d.name().ok()?;
             if !seen.insert(name.clone()) {
