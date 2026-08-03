@@ -19,7 +19,7 @@ import aiosqlite
 
 from fastapi.responses import JSONResponse
 
-from .config import AGENT_PORT, DB_PATH, MEMORIES_DIR
+from .config import AGENT_PORT, DB_PATH, LOG_FILE, MEMORIES_DIR
 from .data.database import db
 from .routes import ensure_docker_image, router
 from .tools.registry import load_skill_registry
@@ -39,7 +39,7 @@ logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] [%(request_id)s] %(name)s %(message)s",
     handlers=[
-        RotatingFileHandler("agent_debug.log", maxBytes=10*1024*1024, backupCount=5, encoding="utf-8"),
+        RotatingFileHandler(LOG_FILE, maxBytes=10*1024*1024, backupCount=5, encoding="utf-8"),
         logging.StreamHandler(),
     ],
 )

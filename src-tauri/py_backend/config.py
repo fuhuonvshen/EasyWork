@@ -127,6 +127,12 @@ else:
         str(PROJECT_ROOT / "agent_output"),
     )
 
+# Log file — bundle 下 CWD 可能是只读根目录（macOS），必须写入数据目录
+if _IN_BUNDLE and _data_dir:
+    LOG_FILE = str(Path(_data_dir) / "agent_debug.log")
+else:
+    LOG_FILE = str(_package_dir.parent / "agent_debug.log")
+
 # Docker sandbox
 DOCKER_MODE = os.environ.get("DOCKER_MODE", "auto").lower()
 DOCKER_IMAGE = os.environ.get("DOCKER_IMAGE", "easework-sandbox:latest")
