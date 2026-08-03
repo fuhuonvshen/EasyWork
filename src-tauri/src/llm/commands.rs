@@ -111,11 +111,14 @@ pub async fn agent_prepare_llm(
     llm_state: State<'_, LlmState>,
     db_state: State<'_, DbState>,
 ) -> Result<serde_json::Value, String> {
-    // Read backend setting
+    // Read backend setting. Empty defaults to "local" — must match
+    // sidecar.rs spawn_python_server, otherwise llama-server is never
+    // started while the agent still expects it on port 11435.
     let backend = database::repo::get_setting(&db_state.0, "agent_llm_backend")
         .await
         .map_err(|e| format!("读取设置失败: {}", e))?
-        .unwrap_or_default();
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "local".to_string());
 
     // Online mode — no local server needed
     if backend != "local" {
