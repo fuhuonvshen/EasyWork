@@ -159,7 +159,7 @@ def read_recipients(file_path: str) -> list[dict[str, str]]:
 
 
 def _get_token_path() -> Path:
-    return Path.home() / ".easework" / "graph_token.json"
+    return Path.home() / ".easywork" / "graph_token.json"
 
 
 def graph_is_configured() -> bool:

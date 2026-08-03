@@ -46,7 +46,6 @@ src-tauri/binaries/
 
 # Local SQLite database (generated at runtime)
 src-tauri/easywork.db
-src-tauri/easework.db
 
 # Downloaded models (Whisper, SenseVoice, GGUF)
 src-tauri/models/

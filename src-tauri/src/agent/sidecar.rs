@@ -109,7 +109,7 @@ pub async fn spawn_python_server(
     if let Some(agent_path) = bundled_agent {
         if agent_path.exists() {
             log::info!("Using bundled agent: {:?}", agent_path);
-            // Derive data dir from db_path (db_path = app_data_dir / "easework.db")
+            // Derive data dir from db_path (db_path = app_data_dir / "easywork.db")
             let app_data_dir = db_path.parent().unwrap_or(db_path);
             let mut cmd = tokio::process::Command::new(agent_path);
             cmd.env("AGENT_PORT", port.to_string())
@@ -184,10 +184,9 @@ fn set_llm_env(
                     .unwrap_or(""));
         }
         _ => {
-            cmd.env("LLM_BACKEND", "deepseek")
-                .env("DEEPSEEK_BASE_URL", "http://127.0.0.1:11435")
-                .env("DEEPSEEK_MODEL", "local")
-                .env("DEEPSEEK_API_KEY", "");
+            cmd.env("LLM_BACKEND", "llamacpp")
+                .env("LLAMACPP_URL", "http://127.0.0.1:11435")
+                .env("LLAMACPP_MODEL", "local");
         }
     }
 }

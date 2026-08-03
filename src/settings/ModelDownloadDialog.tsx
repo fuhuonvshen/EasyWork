@@ -6,6 +6,7 @@ import { X, Loader, Mic, Brain, Bot, FolderOpen, AlertTriangle, Monitor, Setting
 import type { ModelInfo, SpeechModelEntry, LlmModelEntry } from "../types";
 import ModelCard from "./ModelCard";
 import { useModelDownload } from "./useModelDownload";
+import { showToast } from "../components/Toast";
 
 // ── Confirm Delete Modal ──
 function ConfirmDeleteModal({
@@ -48,6 +49,8 @@ export default function ModelDownloadDialog({
 
   // ── Speech models (Whisper + SenseVoice) ──
   const kindMap = useRef<Record<string, "whisper" | "sensevoice">>({});
+  // DB 中保存的后端值，用于保存时检测是否切换了本地/在线
+  const originalBackend = useRef("local");
 
   const speech = useModelDownload<SpeechModelEntry>({
     fetch: async () => {
@@ -137,7 +140,12 @@ export default function ModelDownloadDialog({
 
   // ── Settings ──
   useEffect(() => {
-    invoke<Record<string, string>>("get_settings").then(setAgentSettings).catch((e) => console.warn("加载设置失败", e));
+    invoke<Record<string, string>>("get_settings")
+      .then((s) => {
+        originalBackend.current = s["agent_llm_backend"] || "local";
+        setAgentSettings(s);
+      })
+      .catch((e) => console.warn("加载设置失败", e));
     invoke<{ root: string }>("get_default_paths").then((d) => setDefaultRoot(d.root)).catch(() => {});
     invoke<boolean>("plugin:autostart|is_enabled").then(setAutoStart).catch(() => {});
   }, []);
@@ -150,6 +158,10 @@ export default function ModelDownloadDialog({
     for (const [key, value] of Object.entries(agentSettings)) {
       try { await invoke("update_setting", { key, value }); }
       catch (e) { console.error("保存设置失败", key, e); }
+    }
+    const newBackend = agentSettings["agent_llm_backend"] || "local";
+    if (newBackend !== originalBackend.current) {
+      showToast("LLM 后端已切换，重启应用后生效", "info");
     }
     try {
       if (autoStart) await invoke("plugin:autostart|enable");

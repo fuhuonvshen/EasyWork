@@ -1,4 +1,4 @@
-# EaseWork 项目地图
+# EasyWork 项目地图
 
 > 三层架构：React 前端 → Rust/Tauri 后端 + Python Agent 侧边服务 → SQLite 数据库
 
@@ -68,7 +68,7 @@
 | [ollama_client.py](src-tauri/py_backend/ollama_client.py) | Ollama LLM API 通信 |
 | [skills.py](src-tauri/py_backend/skills.py) | Skill 加载器(从 SKILL.md 读取) |
 | [context.py](src-tauri/py_backend/context.py) | 对话上下文构建 |
-| [database.py](src-tauri/py_backend/database.py) | Python 侧 SQLite 操作(aiosqlite, 共享 easework.db) |
+| [database.py](src-tauri/py_backend/database.py) | Python 侧 SQLite 操作(aiosqlite, 共享 easywork.db) |
 | [memory.py](src-tauri/py_backend/memory.py) | 短期对话摘要 |
 | [memory_long.py](src-tauri/py_backend/memory_long.py) | 长期记忆 |
 | [excel_executor.py](src-tauri/py_backend/excel_executor.py) | Excel 操作工具 |

@@ -1,4 +1,4 @@
-// EaseWork - Tailwind CSS 配置
+// EasyWork - Tailwind CSS 配置
 // 自定义 accent 色系（蓝紫色）、中文字体栈。
 // 扫描 src/ 下所有 TSX/JSX 文件中的 class 名。
 

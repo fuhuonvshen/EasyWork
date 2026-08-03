@@ -37,8 +37,8 @@ pub fn run() {
 
     // Write logs to a writable user data directory
     let log_path = dirs::data_local_dir()
-        .map(|d| d.join("easework").join("easework.log"))
-        .unwrap_or_else(|| PathBuf::from("easework.log"));
+        .map(|d| d.join("easywork").join("easywork.log"))
+        .unwrap_or_else(|| PathBuf::from("easywork.log"));
     if let Some(parent) = log_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -346,7 +346,7 @@ async fn start_agent_sidecar(app_handle: &tauri::AppHandle, app_dir: &std::path:
         || manifest_dir.clone(),
         |p| p.to_path_buf(),
     );
-    let db_path = app_dir.join("easework.db");
+    let db_path = app_dir.join("easywork.db");
 
     // Dynamically allocate port if default is occupied
     let default_port = 9876u16;

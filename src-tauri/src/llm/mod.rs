@@ -23,47 +23,65 @@ pub async fn init(models_dir: &Path, bin_dir: &Path, resource_dir: Option<&Path>
         bin_dir.to_path_buf(),
     )));
 
-    // 2. Ensure llama-server binary exists
+    // 2. GPU driver detection FIRST, so ensure_binary (which reads gpu_layers)
+    //    can pick the CUDA archive instead of the CPU one. macOS: Metal always.
+    #[cfg(target_os = "macos")]
+    let has_driver = true;
+    #[cfg(not(target_os = "macos"))]
+    let has_driver = LlmEngine::has_nvidia_driver();
+    if has_driver {
+        engine.write().await.gpu_layers = 99;
+    }
+    log::info!("GPU driver detected: {}, gpu_layers={}", has_driver, if has_driver { 99 } else { 0 });
+
+    // 3. Ensure llama-server binary exists. copy_from_bundle runs every
+    //    launch and fills in missing files (self-healing), so a bin_dir that
+    //    lost its CUDA runtime DLLs recovers without manual cleanup.
     let mut binary_copied = false;
-    if !engine.read().await.is_binary_ready() {
-        // Try development binaries directory (src-tauri/binaries/)
-        if let Some(dev_dir) = dev_bin_dir {
-            if engine.read().await.copy_from_bundle(dev_dir).is_ok() {
+    if let Some(dev_dir) = dev_bin_dir {
+        if engine.read().await.copy_from_bundle(dev_dir).is_ok() {
+            binary_copied = true;
+        }
+    }
+
+    // Try production bundle (resource dir)
+    if !binary_copied {
+        if let Some(res_dir) = resource_dir {
+            let bundle_path = res_dir.join("binaries");
+            if engine.read().await.copy_from_bundle(&bundle_path).is_ok() {
                 binary_copied = true;
             }
         }
-
-        // Try production bundle (resource dir)
-        if !binary_copied {
-            if let Some(res_dir) = resource_dir {
-                let bundle_path = res_dir.join("binaries");
-                if engine.read().await.copy_from_bundle(&bundle_path).is_ok() {
-                    binary_copied = true;
-                }
-            }
-        }
-
-        // Download from GitHub as last resort
-        if !binary_copied {
-            log::info!("llama-server 二进制不存在，正在从 GitHub 下载...");
-            let eng = engine.clone();
-            tokio::spawn(async move {
-                if let Err(e) = eng.read().await.ensure_binary().await {
-                    log::error!("llama-server 下载失败: {}", e);
-                }
-            });
-        }
-    } else {
-        binary_copied = true;
     }
 
-    // 3. Auto-detect GPU: macOS always has Metal, other platforms check CUDA
-    #[cfg(target_os = "macos")]
-    let has_gpu = true;
+    // Download from GitHub as last resort
+    if !binary_copied {
+        log::info!("llama-server 二进制不存在，正在从 GitHub 下载...");
+        let eng = engine.clone();
+        tokio::spawn(async move {
+            if let Err(e) = eng.read().await.ensure_binary().await {
+                log::error!("llama-server 下载失败: {}", e);
+            }
+            // Download finished (or not) — verify CUDA runtime again;
+            // the CUDA archive brings its own runtime DLLs.
+            #[cfg(not(target_os = "macos"))]
+            {
+                let mut w = eng.write().await;
+                if w.gpu_layers == 0 && LlmEngine::has_cuda_runtime(&w.bin_dir) {
+                    log::info!("CUDA 运行库已就位，启用 GPU (gpu_layers=99)");
+                    w.gpu_layers = 99;
+                }
+            }
+        });
+    }
+
+    // 4. Synchronous copy paths only: verify the CUDA runtime DLL actually
+    //    landed in bin_dir. Driver without runtime → CPU fallback.
     #[cfg(not(target_os = "macos"))]
-    let has_gpu = LlmEngine::check_cuda(bin_dir);
-    engine.write().await.gpu_layers = if has_gpu { 99 } else { 0 };
-    log::info!("GPU detection: {}, gpu_layers={}", has_gpu, if has_gpu { 99 } else { 0 });
+    if has_driver && !LlmEngine::has_cuda_runtime(bin_dir) {
+        log::warn!("NVIDIA 驱动存在但 CUDA 运行库 (cudart64_*) 不在 bin 目录 — 降级为 CPU 推理");
+        engine.write().await.gpu_layers = 0;
+    }
 
     Ok(engine)
 }

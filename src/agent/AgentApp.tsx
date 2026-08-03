@@ -141,7 +141,7 @@ export default function AgentApp({ onBack, initStatus }: { onBack: () => void; i
           <p className="text-xs text-red-600 whitespace-pre-wrap">{initStatus.message}</p>
         </div>
         <p className="text-xs text-gray-400 mt-2">
-          请检查日志文件或重新安装应用。日志路径：在文件资源管理器输入 %LOCALAPPDATA%\easework\easework.log
+          请检查日志文件或重新安装应用。日志路径：在文件资源管理器输入 %LOCALAPPDATA%\easywork\easywork.log
         </p>
         <button
           onClick={onBack}

@@ -72,15 +72,15 @@ else:
 DB_PATH = os.environ.get("AGENT_DB_PATH")
 if not DB_PATH:
     _candidates = [
-        PROJECT_ROOT / "easework.db",
-        PROJECT_ROOT / "app_data" / "easework.db",
+        PROJECT_ROOT / "easywork.db",
+        PROJECT_ROOT / "app_data" / "easywork.db",
     ]
     for _c in _candidates:
         if _c.exists():
             DB_PATH = str(_c)
             break
     if not DB_PATH:
-        DB_PATH = str(PROJECT_ROOT / "easework.db")
+        DB_PATH = str(PROJECT_ROOT / "easywork.db")
 
 # Skills directory (not bundled, will be empty in release → graceful fallback)
 if _IN_BUNDLE and _data_dir:
@@ -127,9 +127,15 @@ else:
         str(PROJECT_ROOT / "agent_output"),
     )
 
+# Log file — bundle 下 CWD 可能是只读根目录（macOS），必须写入数据目录
+if _IN_BUNDLE and _data_dir:
+    LOG_FILE = str(Path(_data_dir) / "agent_debug.log")
+else:
+    LOG_FILE = str(_package_dir.parent / "agent_debug.log")
+
 # Docker sandbox
 DOCKER_MODE = os.environ.get("DOCKER_MODE", "auto").lower()
-DOCKER_IMAGE = os.environ.get("DOCKER_IMAGE", "easework-sandbox:latest")
+DOCKER_IMAGE = os.environ.get("DOCKER_IMAGE", "easywork-sandbox:latest")
 DOCKER_MEMORY_LIMIT = os.environ.get("DOCKER_MEMORY_LIMIT", "512m")
 DOCKER_CPU_LIMIT = float(os.environ.get("DOCKER_CPU_LIMIT", "1.0"))
 DOCKER_BUILD_TIMEOUT = int(os.environ.get("DOCKER_BUILD_TIMEOUT", "120"))

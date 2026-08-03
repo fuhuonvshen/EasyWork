@@ -1,6 +1,6 @@
 """Async SQLite database layer for agent conversations and messages.
 
-Shares the same easework.db file as the Rust backend. Uses aiosqlite for
+Shares the same easywork.db file as the Rust backend. Uses aiosqlite for
 non-blocking access. The Rust backend uses WAL mode, so concurrent
 reads from Python are safe.
 """

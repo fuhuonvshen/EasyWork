@@ -117,8 +117,10 @@ pub async fn agent_prepare_llm(
         .map_err(|e| format!("读取设置失败: {}", e))?
         .unwrap_or_default();
 
-    // Online mode — no local server needed
-    if backend != "local" {
+    // Online mode — no local server needed.
+    // Only explicit "online" skips; missing/unknown values default to local,
+    // mirroring sidecar::set_llm_env so both判定点极性一致。
+    if backend == "online" {
         return Ok(serde_json::json!({"status": "skipped"}));
     }
 

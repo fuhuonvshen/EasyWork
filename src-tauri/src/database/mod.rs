@@ -13,7 +13,7 @@ pub async fn init(app_dir: &Path) -> Result<SqlitePool> {
     std::fs::create_dir_all(app_dir)
         .context("创建应用数据目录失败")?;
 
-    let db_path = app_dir.join("easework.db");
+    let db_path = app_dir.join("easywork.db");
     log::info!("Database path: {}", db_path.display());
 
     if !db_path.exists() {

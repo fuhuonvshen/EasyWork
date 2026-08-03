@@ -99,18 +99,17 @@ impl LlmEngine {
     }
 
     /// Copy the bundled llama-server binary (and all companion DLLs) to bin_dir.
-    /// Called once during app setup.
+    /// Called once during app setup. Missing files are copied in; existing
+    /// files are kept (bin_dir may already hold a downloaded build), so a
+    /// partially-populated bin_dir self-heals on next launch.
     pub fn copy_from_bundle(&self, bundle_path: &std::path::Path) -> Result<()> {
-        if self.is_binary_ready() {
-            return Ok(());
-        }
         std::fs::create_dir_all(&self.bin_dir)?;
 
         if !bundle_path.exists() {
             return Err(anyhow::anyhow!("bundle path not found: {:?}", bundle_path));
         }
 
-        let mut found_exe = false;
+        let mut found_exe = self.is_binary_ready();
         for entry in std::fs::read_dir(bundle_path)
             .context("读取 bundle 目录失败")?
         {
@@ -118,17 +117,30 @@ impl LlmEngine {
             let fname = entry.file_name();
             let name = fname.to_string_lossy();
 
-            if cfg!(target_os = "windows") && (name.ends_with(".exe") || name.ends_with(".dll")) {
-                let dst = self.bin_dir.join(&*name);
-                std::fs::copy(entry.path(), &dst)?;
-                if name == "llama-server.exe" {
+            let is_binary = cfg!(target_os = "windows")
+                && (name.ends_with(".exe") || name.ends_with(".dll"))
+                || (!cfg!(target_os = "windows") && name == "llama-server");
+            if !is_binary {
+                continue;
+            }
+
+            let dst = self.bin_dir.join(&*name);
+            if dst.exists() {
+                if name == "llama-server.exe" || name == "llama-server" {
                     found_exe = true;
-                    log::info!("llama-server copied to {:?}", dst);
                 }
-            } else if name == "llama-server" || name == "llama-server-impl.dll" {
-                let dst = self.bin_dir.join(&*name);
-                std::fs::copy(entry.path(), &dst)?;
+                continue;
+            }
+            // A file may be locked (e.g. agent running from bin_dir) — don't
+            // abort the whole copy, just skip it and let the download path
+            // or the next launch fill the gap.
+            if let Err(e) = std::fs::copy(entry.path(), &dst) {
+                log::warn!("copy {} failed: {}", name, e);
+                continue;
+            }
+            if name == "llama-server.exe" || name == "llama-server" {
                 found_exe = true;
+                log::info!("llama-server copied to {:?}", dst);
             }
         }
 
@@ -432,9 +444,8 @@ impl LlmEngine {
         }
     }
 
-    /// Check if NVIDIA GPU with CUDA Runtime is available.
-    /// Checks system paths AND the app's own binaries directory (for bundled CUDA DLLs).
-    pub fn check_cuda(bin_dir: &std::path::Path) -> bool {
+    /// Check if NVIDIA driver is installed (nvidia-smi present and runnable).
+    pub fn has_nvidia_driver() -> bool {
         // Must have NVIDIA driver
         #[allow(unused_mut)]
         let mut nvcmd = std::process::Command::new("nvidia-smi");
@@ -447,16 +458,19 @@ impl LlmEngine {
             .map(|s| s.success())
             .unwrap_or(false);
 
-        if !has_driver {
-            let alt = [
-                "C:\\Windows\\System32\\nvidia-smi.exe",
-                "C:\\Program Files\\NVIDIA Corporation\\NVSMI\\nvidia-smi.exe",
-            ];
-            if !alt.iter().any(|p| std::path::Path::new(p).exists()) {
-                return false;
-            }
+        if has_driver {
+            return true;
         }
+        let alt = [
+            "C:\\Windows\\System32\\nvidia-smi.exe",
+            "C:\\Program Files\\NVIDIA Corporation\\NVSMI\\nvidia-smi.exe",
+        ];
+        alt.iter().any(|p| std::path::Path::new(p).exists())
+    }
 
+    /// Check for CUDA Runtime DLL (cudart64_*) in System32, the app's bin dir,
+    /// and PATH. llama.cpp's CUDA build needs these at load time.
+    pub fn has_cuda_runtime(bin_dir: &std::path::Path) -> bool {
         // Check for CUDA Runtime DLL in PATH, System32, and app's own bin dir
         let search_dirs: Vec<std::path::PathBuf> = {
             let mut dirs = vec![
