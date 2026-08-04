@@ -2,10 +2,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Send, Loader, Paperclip, Upload } from "lucide-react";
+import { listen } from "@tauri-apps/api/event";
+import { Send, Loader, Paperclip, Upload, ChevronDown } from "lucide-react";
 import Markdown from "../components/Markdown";
+import { showToast } from "../components/Toast";
 import { ERRORS, toUserError } from "../errors";
-import type { AgentMessage } from "../types";
+import type { AgentMessage, AgentStreamEvent } from "../types";
 
 interface Props {
   conversationId: string;
@@ -18,6 +20,8 @@ export default function AgentChat({ conversationId, onConversationUpdate }: Prop
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [stream, setStream] = useState<{ text: string; thinking: string; toolStatus: string | null } | null>(null);
+  const [thinkingCollapsed, setThinkingCollapsed] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -38,7 +42,13 @@ export default function AgentChat({ conversationId, onConversationUpdate }: Prop
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, stream]);
+
+  // Clear transient streaming bubble when switching conversations
+  useEffect(() => {
+    setStream(null);
+    setThinkingCollapsed(false);
+  }, [conversationId]);
 
   // ── Drag & drop file handling ──
   useEffect(() => {
@@ -92,6 +102,7 @@ export default function AgentChat({ conversationId, onConversationUpdate }: Prop
       onConversationUpdate();
     } catch (e) {
       console.error("File upload error:", e);
+      showToast(toUserError(ERRORS.AGENT_CHAT, e), "error");
     }
     setUploading(false);
   };
@@ -105,6 +116,7 @@ export default function AgentChat({ conversationId, onConversationUpdate }: Prop
       onConversationUpdate();
     } catch (e) {
       console.error("File upload error:", e);
+      showToast(toUserError(ERRORS.AGENT_CHAT, e), "error");
     }
     setUploading(false);
   };
@@ -115,11 +127,13 @@ export default function AgentChat({ conversationId, onConversationUpdate }: Prop
     if (!text || sending) return;
     setInput("");
     setSending(true);
+    setStream({ text: "", thinking: "", toolStatus: null });
+    const convId = conversationId;
 
     // Immediately show user message optimistically
     const tempUserMsg: AgentMessage = {
       id: "temp-user-" + Date.now(),
-      conversation_id: conversationId,
+      conversation_id: convId,
       role: "user",
       content: text,
       tool_calls: null,
@@ -127,10 +141,27 @@ export default function AgentChat({ conversationId, onConversationUpdate }: Prop
     };
     setMessages((prev) => [...prev, tempUserMsg]);
 
-    // Then send to backend
+    let unlisten: (() => void) | null = null;
     try {
-      await invoke<string>("agent_chat", {
-        conversationId,
+      // Register stream listener before invoking (single-flight: sending guard)
+      unlisten = await listen<AgentStreamEvent>("agent-stream", (e) => {
+        const p = e.payload;
+        if (p.conversation_id !== convId) return; // stale events after conversation switch
+        if (p.type === "plan" || p.type === "thinking") {
+          // 计划与模型思考合并进可折叠思考区
+          setStream((s) => (s ? { ...s, thinking: s.thinking + p.delta } : s));
+        } else if (p.type === "answer") {
+          setStream((s) => (s ? { ...s, text: s.text + p.delta } : s));
+        } else if (p.type === "tool") {
+          setStream((s) => (s ? { ...s, toolStatus: `正在执行工具: ${p.name}` } : s));
+        } else if (p.type === "tool_result") {
+          setStream((s) => (s ? { ...s, toolStatus: null } : s));
+        }
+        // "error"/"done" intentionally ignored — reload after invoke resolves
+      });
+
+      await invoke("agent_chat_stream", {
+        conversationId: convId,
         message: text,
       });
       loadMessages();
@@ -138,15 +169,18 @@ export default function AgentChat({ conversationId, onConversationUpdate }: Prop
     } catch (e) {
       const errorMsg: AgentMessage = {
         id: "temp-error-" + Date.now(),
-        conversation_id: conversationId,
+        conversation_id: convId,
         role: "assistant",
         content: toUserError(ERRORS.AGENT_CHAT, e),
         tool_calls: null,
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      unlisten?.();
+      setStream(null);
+      setSending(false);
     }
-    setSending(false);
   };
 
   return (
@@ -256,10 +290,45 @@ export default function AgentChat({ conversationId, onConversationUpdate }: Prop
               </div>
             );
           })}
-          {sending && (
-            <div className="flex items-center gap-2 text-sm text-gray-400">
-              <Loader size={14} className="animate-spin" />
-              AI 思考中...
+          {stream && (
+            <div className="flex gap-3 text-sm">
+              <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 mt-1">
+                <span className="text-xs font-bold text-emerald-600">AI</span>
+              </div>
+              <div className="max-w-[75%] rounded-2xl px-4 py-3 bg-gray-100 text-gray-700">
+                {stream.thinking && (
+                  <div className="mb-2">
+                    <button
+                      onClick={() => setThinkingCollapsed(!thinkingCollapsed)}
+                      className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 cursor-pointer"
+                    >
+                      <ChevronDown
+                        size={14}
+                        className={`transition-transform ${thinkingCollapsed ? "-rotate-90" : ""}`}
+                      />
+                      思考过程
+                    </button>
+                    {!thinkingCollapsed && (
+                      <div className="mt-1 text-xs text-gray-500 whitespace-pre-wrap border-l-2 border-gray-300 pl-2 max-h-48 overflow-y-auto">
+                        {stream.thinking}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {stream.text ? (
+                  <div className="text-sm"><Markdown content={stream.text} /></div>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm text-gray-400">
+                    <Loader size={14} className="animate-spin" />
+                    AI 思考中...
+                  </div>
+                )}
+                {stream.toolStatus && (
+                  <div className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-amber-50 text-amber-700 border border-amber-200">
+                    {stream.toolStatus}
+                  </div>
+                )}
+              </div>
             </div>
           )}
           <div ref={bottomRef} />

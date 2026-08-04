@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Query, Request
+from fastapi.responses import StreamingResponse
 
 from .llm import chat
 from .config import AGENT_INPUT_DIR, DOCKER_BUILD_TIMEOUT, MEMORIES_DIR
@@ -82,6 +83,16 @@ async def get_messages(conversation_id: str = Query(...)) -> list[AgentMessage]:
 async def chat_endpoint(req: ChatRequest, request: Request) -> ChatResponse:
     skills = request.app.state.skill_registry
     return await chat.chat(req, skills)
+
+
+@router.post("/chat/stream")
+async def chat_stream_endpoint(req: ChatRequest, request: Request) -> StreamingResponse:
+    skills = request.app.state.skill_registry
+    return StreamingResponse(
+        chat.chat_stream(req, skills),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── Export Report ───────────────────────────────────────────
@@ -190,7 +201,11 @@ async def _persist_file_message(conversation_id: str, file_name: str, content: s
     from .llm.chat import _make_message
 
     attach_msg = _make_message(
-        conversation_id, "user", f"[上传了文件: {file_name}]\n\n{content}"
+        conversation_id, "user",
+        f"[上传了文件: {file_name}]\n"
+        f"上方仅为文件预览，可能已截断。完整文件保存在本地（agent_input 目录，文件名 {file_name}），"
+        f"如需精确处理数据，请通过代码按需读取必要部分（如 `Path(INPUT_DIR) / '{file_name}'`）。\n\n"
+        f"{content}",
     )
     await db.insert_message(attach_msg)
     await db.commit()
@@ -201,6 +216,11 @@ async def _persist_file_message(conversation_id: str, file_name: str, content: s
 def _copy_to_input(src: Path, input_dir: str) -> None:
     os.makedirs(input_dir, exist_ok=True)
     dest = os.path.join(input_dir, src.name)
+    # 源文件已在工作目录时跳过复制——Windows 上 copy2 同路径会
+    # 抛 PermissionError (WinError 32)，且复制自身毫无意义
+    if os.path.normcase(os.path.abspath(str(src))) == os.path.normcase(os.path.abspath(dest)):
+        logger.info("File already in agent_input: %s (skip copy)", src)
+        return
     shutil.copy2(str(src), dest)
     logger.info("Copied %s -> %s", src, dest)
 

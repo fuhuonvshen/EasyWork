@@ -67,6 +67,15 @@ export interface AgentMessage {
   created_at: string;
 }
 
+export type AgentStreamEvent =
+  | { type: "plan"; conversation_id: string; delta: string }
+  | { type: "thinking"; conversation_id: string; delta: string }
+  | { type: "answer"; conversation_id: string; delta: string }
+  | { type: "tool"; conversation_id: string; name: string; status: "executing" }
+  | { type: "tool_result"; conversation_id: string; name: string; status: "done" | "error" | "timeout" }
+  | { type: "error"; conversation_id: string; message: string }
+  | { type: "done"; conversation_id: string; tool_calls_used: string[] };
+
 export interface ToolCall {
   name: string;
   arguments: Record<string, unknown>;

@@ -214,6 +214,7 @@ pub fn run() {
             agent::commands::agent_attach_file,
             agent::commands::agent_attach_content,
             agent::commands::agent_chat,
+            agent::commands::agent_chat_stream,
             agent::commands::agent_list_conversations,
             agent::commands::agent_create_conversation,
             agent::commands::agent_delete_conversation,

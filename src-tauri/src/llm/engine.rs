@@ -372,7 +372,11 @@ impl LlmEngine {
                 .arg("--n-gpu-layers")
                 .arg(ngl.to_string())
                 .arg("--ctx-size")
-                .arg("32768");
+                .arg("32768")
+                // 把模型思考提取到 message.reasoning_content（DeepSeek 同款格式），
+                // 前端可分离显示；非思考模型不受影响
+                .arg("--reasoning-format")
+                .arg("deepseek");
 
             #[cfg(target_os = "windows")]
             cmd.as_std_mut().creation_flags(0x08000000);

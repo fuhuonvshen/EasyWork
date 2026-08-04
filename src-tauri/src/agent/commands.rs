@@ -4,7 +4,7 @@
 // ReAct loop, skill system) runs in the Python sidecar.
 // These commands only forward requests and return responses.
 
-use tauri::State;
+use tauri::{Emitter, State};
 use crate::state::AgentSidecarState;
 use crate::state::DbState;
 use crate::database::repo;
@@ -28,6 +28,49 @@ pub async fn agent_chat(
         .ok_or_else(|| "响应缺少 content 字段".to_string())
 }
 
+/// Stream agent chat via SSE. Emits "agent-stream" events (payloads have a
+/// "type" field: plan/answer/tool/tool_result/error/done) and returns when
+/// the stream ends. Uses a dedicated client without the 180s global timeout.
+#[tauri::command]
+pub async fn agent_chat_stream(
+    conversation_id: String,
+    message: String,
+    app: tauri::AppHandle,
+    sidecar: State<'_, AgentSidecarState>,
+) -> Result<(), String> {
+    let body = serde_json::json!({
+        "conversation_id": conversation_id,
+        "message": message,
+    });
+    let resp = sidecar.0.stream_post("/chat/stream", &body).await?;
+
+    use futures_util::StreamExt;
+    let mut stream = resp.bytes_stream();
+    let mut buf: Vec<u8> = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("读取 Agent 流失败: {}", e))?;
+        buf.extend_from_slice(&chunk);
+        // Drain complete SSE frames (Python emits plain-\n frames ending in \n\n)
+        while let Some(pos) = buf.windows(2).position(|w| w == b"\n\n") {
+            let frame: Vec<u8> = buf.drain(..=pos).collect();
+            let text = String::from_utf8_lossy(&frame);
+            let mut data: Option<&str> = None;
+            for line in text.lines() {
+                let line = line.trim_end_matches('\r');
+                if let Some(v) = line.strip_prefix("data: ") {
+                    data = Some(v);
+                }
+            }
+            if let Some(d) = data {
+                if let Ok(payload) = serde_json::from_str::<serde_json::Value>(d) {
+                    let _ = app.emit("agent-stream", &payload);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Forward a file attachment request to the Python agent server.
 #[tauri::command]
 pub async fn agent_attach_file(
@@ -40,6 +83,9 @@ pub async fn agent_attach_file(
         "file_path": file_path,
     });
     let resp: serde_json::Value = sidecar.0.post("/attach_file", &body).await?;
+    if let Some(err) = resp["error"].as_str() {
+        return Err(err.to_string());
+    }
     resp["content"]
         .as_str()
         .map(|s| s.to_string())
@@ -105,6 +151,9 @@ pub async fn agent_attach_content(
         "is_binary": is_binary,
     });
     let resp: serde_json::Value = sidecar.0.post("/attach_content", &body).await?;
+    if let Some(err) = resp["error"].as_str() {
+        return Err(err.to_string());
+    }
     resp["content"]
         .as_str()
         .map(|s| s.to_string())

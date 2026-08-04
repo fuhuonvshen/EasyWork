@@ -114,10 +114,11 @@ def _wrap_code(code: str) -> str:
     from openpyxl import Workbook, load_workbook
     from pathlib import Path
 
-    AGENT_INPUT = r"{input_dir}"
-    AGENT_OUTPUT = r"{output_dir}"
-    os.makedirs(AGENT_OUTPUT, exist_ok=True)
-    os.chdir(AGENT_OUTPUT)
+    # 变量名与 Docker 沙箱保持一致（sandbox.py），提示词按 INPUT_DIR/OUTPUT_DIR 引导
+    INPUT_DIR = r"{input_dir}"
+    OUTPUT_DIR = r"{output_dir}"
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.chdir(OUTPUT_DIR)
     """).format(input_dir=AGENT_INPUT_DIR, output_dir=AGENT_OUTPUT_DIR)
 
     full_code = preamble + "\n" + code

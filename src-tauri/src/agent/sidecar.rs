@@ -21,6 +21,9 @@ const HEALTH_CHECK_TIMEOUT: Duration = Duration::from_secs(30);
 /// Manages the Python agent sidecar process and HTTP connection.
 pub struct AgentSidecar {
     client: Client,
+    /// Dedicated client for SSE streaming: no 180s cap (long local generations)
+    /// and no system proxy (localhost only, mirrors Python trust_env=False).
+    stream_client: Client,
     base_url: RwLock<String>,
 }
 
@@ -31,6 +34,11 @@ impl AgentSidecar {
                 .timeout(Duration::from_secs(180))
                 .build()
                 .expect("Failed to create HTTP client"),
+            stream_client: Client::builder()
+                .no_proxy()
+                .timeout(Duration::from_secs(600))
+                .build()
+                .expect("Failed to create stream client"),
             base_url: RwLock::new(format!("http://127.0.0.1:{}", port)),
         }
     }
@@ -75,6 +83,28 @@ impl AgentSidecar {
     /// Convenience: GET without body.
     pub async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<T, String> {
         self.call(reqwest::Method::GET, path, None).await
+    }
+
+    /// Open a streaming POST and return the raw response (caller drains bytes).
+    /// Uses the dedicated stream client without the 180s global timeout.
+    pub async fn stream_post(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<reqwest::Response, String> {
+        let url = format!("{}{}", self.base_url.read().await, path);
+        let resp = self
+            .stream_client
+            .post(&url)
+            .json(body)
+            .send()
+            .await
+            .map_err(|e| format!("Agent 服务不可达: {}", e))?;
+        if !resp.status().is_success() {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(format!("Agent 服务错误 ({}): {}", resp.status().as_u16(), text));
+        }
+        Ok(resp)
     }
 }
 
