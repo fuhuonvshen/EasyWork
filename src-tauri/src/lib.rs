@@ -13,6 +13,7 @@ mod llm;
 mod settings;
 mod summary;
 mod whisper;
+mod update;
 
 mod state;
 
@@ -230,6 +231,8 @@ pub fn run() {
             settings::commands::select_folder,
             settings::commands::get_default_paths,
             settings::commands::pick_audio_file,
+            // ── Update ──
+            update::exit_for_update,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

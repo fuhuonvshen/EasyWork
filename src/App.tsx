@@ -72,14 +72,16 @@ export default function App() {
   }, []);
 
   const handleUpdateInstall = async () => {
-    const { relaunch } = await import("@tauri-apps/plugin-process");
     if (!updateInfo) return;
     // Show indeterminate progress while downloading (no progress API in this plugin version)
     setUpdateProgress(1);
     try {
       await updateInfo.downloadAndInstall();
       setUpdateProgress(100);
-      await relaunch();
+      // 不要 relaunch：新进程会锁住安装文件导致 MSI 安装失败（Error 1310）。
+      // exit_for_update 会先清理 easywork-agent/llama-server 子进程再正常退出，
+      // 让 msiexec 完成安装；安装完成后请手动重新打开应用。
+      await invoke("exit_for_update");
     } catch (e) {
       setUpdateProgress(0);
       console.error("更新失败", e);
