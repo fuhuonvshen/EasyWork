@@ -61,7 +61,7 @@ export interface ReportItem {
 export interface AgentMessage {
   id: string;
   conversation_id: string;
-  role: "user" | "assistant" | "system" | "tool";
+  role: "user" | "assistant" | "system" | "tool" | "thinking";
   content: string;
   tool_calls: string | null;
   created_at: string;

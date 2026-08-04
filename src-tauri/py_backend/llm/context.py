@@ -63,10 +63,11 @@ async def build_context(
     history_raw = await db.get_messages(conversation_id)
     existing_summary = await db.get_summary(conversation_id)
 
-    # Build history messages (skip raw tool results, but convert tool_calls to text)
+    # Build history messages (skip raw tool results and thinking,
+    # but convert tool_calls to text)
     history: list[dict] = []
     for msg in history_raw:
-        if msg["role"] == "tool":
+        if msg["role"] in ("tool", "thinking"):
             continue
         content = msg["content"]
         if msg["role"] == "assistant" and msg.get("tool_calls"):

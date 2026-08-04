@@ -14,6 +14,32 @@ interface Props {
   onConversationUpdate: () => void;
 }
 
+// DeepSeek 风格的可折叠思考过程块（历史消息中的 role='thinking'）
+function MessageThinking({ content }: { content: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex gap-3 text-sm">
+      <div className="w-7 h-7 rounded-full bg-gray-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+        <span className="text-xs text-gray-400">💭</span>
+      </div>
+      <div className="max-w-[75%]">
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 cursor-pointer"
+        >
+          <ChevronDown size={12} className={`transition-transform ${open ? "" : "-rotate-90"}`} />
+          思考过程
+        </button>
+        {open && (
+          <div className="mt-1 text-xs text-gray-400 whitespace-pre-wrap border-l-2 border-gray-200 pl-2 max-h-48 overflow-y-auto">
+            {content}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AgentChat({ conversationId, onConversationUpdate }: Props) {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [input, setInput] = useState("");
@@ -208,6 +234,11 @@ export default function AgentChat({ conversationId, onConversationUpdate }: Prop
         )}
         <div className="max-w-3xl mx-auto space-y-4">
           {messages.map((msg) => {
+            // Thinking messages: collapsible gray block (DeepSeek-style)
+            if (msg.role === "thinking") {
+              return <MessageThinking key={msg.id} content={msg.content} />;
+            }
+
             // Tool messages: show as compact pills
             if (msg.role === "tool") {
               let toolName: string | null = null;

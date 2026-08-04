@@ -95,6 +95,9 @@ async def chat(req: ChatRequest, skills: SkillRegistry) -> ChatResponse:
 
         has_tool_calls = bool(msg.get("tool_calls"))
         raw_content = msg.get("content", "") or ""
+        thinking = (msg.get("reasoning_content") or "").strip()
+        if thinking:
+            await db.insert_message(_make_message(req.conversation_id, "thinking", thinking))
         content_len = len(raw_content)
         tc_count = len(msg.get("tool_calls", []) or [])
         logger.info("[chat] iter=%d %.1fs — content=%d chars, tool_calls=%d",
@@ -364,6 +367,12 @@ async def chat_stream(req: ChatRequest, skills: SkillRegistry) -> AsyncGenerator
     await db.insert_message(user_msg)
     await db.auto_title(req.conversation_id)
 
+    async def _persist_thinking(parts: list[str]) -> None:
+        """把模型的思考过程持久化为 role='thinking' 消息（前端灰色折叠块显示）。"""
+        text = "".join(parts).strip()
+        if text:
+            await db.insert_message(_make_message(req.conversation_id, "thinking", text))
+
     try:
         # ═══ Phase 1: Plan (streamed) ═══
         # plan_instr 合并进已有的 system 消息——多条 system 会让 llama.cpp
@@ -373,9 +382,11 @@ async def chat_stream(req: ChatRequest, skills: SkillRegistry) -> AsyncGenerator
         else:
             plan_msgs = [{"role": "system", "content": plan_instr}] + messages
         plan_parts: list[str] = []
+        plan_thinking: list[str] = []
         try:
             async for ev in llm_chat_stream(plan_msgs, temperature=0.2, max_tokens=2048):
                 if ev["type"] == "thinking":
+                    plan_thinking.append(ev["delta"])
                     yield _sse("thinking", {"type": "thinking",
                                             "conversation_id": req.conversation_id,
                                             "delta": ev["delta"]})
@@ -390,6 +401,7 @@ async def chat_stream(req: ChatRequest, skills: SkillRegistry) -> AsyncGenerator
             plan_content = "无法生成计划，直接执行。"
             yield _sse("plan", {"type": "plan", "conversation_id": req.conversation_id,
                                 "delta": plan_content})
+        await _persist_thinking(plan_thinking)
 
         plan_msg = _make_message(req.conversation_id, "assistant", f"执行计划\n{plan_content}")
         await db.insert_message(plan_msg)
@@ -402,10 +414,12 @@ async def chat_stream(req: ChatRequest, skills: SkillRegistry) -> AsyncGenerator
 
         for iteration in range(MAX_REACT_ITERATIONS):
             content_parts: list[str] = []
+            thinking_parts: list[str] = []
             msg = None
             try:
                 async for ev in llm_chat_stream(messages, tools if tools else None):
                     if ev["type"] == "thinking":
+                        thinking_parts.append(ev["delta"])
                         yield _sse("thinking", {"type": "thinking",
                                                 "conversation_id": req.conversation_id,
                                                 "delta": ev["delta"]})
@@ -418,17 +432,20 @@ async def chat_stream(req: ChatRequest, skills: SkillRegistry) -> AsyncGenerator
             except LLMTimeoutError as e:
                 # 不重试：会重复已发出的 token
                 logger.error("[chat] iter=%d stream timeout: %s", iteration + 1, e.message)
+                await _persist_thinking(thinking_parts)
                 final_content = f"❌ {e.message}"
                 yield _sse("error", {"type": "error", "conversation_id": req.conversation_id,
                                      "message": e.message})
                 break
             except LLMError as e:
                 logger.error("[chat] iter=%d LLM error: %s", iteration + 1, e.message)
+                await _persist_thinking(thinking_parts)
                 final_content = f"❌ {e.message}"
                 yield _sse("error", {"type": "error", "conversation_id": req.conversation_id,
                                      "message": e.message})
                 break
 
+            await _persist_thinking(thinking_parts)
             if msg is None:
                 final_content = "[AI 返回空响应]"
                 logger.warning("[chat] iter=%d LLM returned None", iteration + 1)
