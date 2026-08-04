@@ -184,6 +184,9 @@ async def chat(req: ChatRequest, skills: SkillRegistry) -> ChatResponse:
 
     await db.insert_message(_make_message(req.conversation_id, "assistant", final_content))
     await db.commit()
+    # 小模型常在 plan 阶段直接输出正文——与最终回答重复时删除 plan 消息，避免显示两次
+    if _plan_repeats_answer(plan_content, final_content):
+        await db.delete_message(plan_msg["id"])
     asyncio.create_task(_extract_memories(req.message, final_content, mem_dir))
     asyncio.create_task(_generate_title(req.conversation_id, req.message, final_content))
 
@@ -201,6 +204,25 @@ async def chat(req: ChatRequest, skills: SkillRegistry) -> ChatResponse:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _plan_repeats_answer(plan: str, final: str) -> bool:
+    """plan 与最终回答内容重复时返回 True。
+
+    小模型（如 qwen3.5-4B）常在 plan 阶段直接输出完整正文而非计划，
+    导致"执行计划"消息与最终回答几乎相同、用户看到两次回答。
+    """
+    p = (plan or "").strip()
+    f = (final or "").strip()
+    if not p or not f or p == f:
+        return bool(p and f)
+    common = 0
+    for a, b in zip(p, f):
+        if a == b:
+            common += 1
+        else:
+            break
+    return common / min(len(p), len(f)) > 0.5
 
 
 def _make_message(
@@ -508,6 +530,9 @@ async def chat_stream(req: ChatRequest, skills: SkillRegistry) -> AsyncGenerator
 
         await db.insert_message(_make_message(req.conversation_id, "assistant", final_content))
         await db.commit()
+        # 小模型常在 plan 阶段直接输出正文——与最终回答重复时删除 plan 消息，避免显示两次
+        if _plan_repeats_answer(plan_content, final_content):
+            await db.delete_message(plan_msg["id"])
         asyncio.create_task(_extract_memories(req.message, final_content, mem_dir))
         asyncio.create_task(_generate_title(req.conversation_id, req.message, final_content))
 

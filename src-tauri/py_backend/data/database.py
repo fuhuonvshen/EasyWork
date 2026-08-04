@@ -183,6 +183,13 @@ class Database:
         """Explicit commit for batch operations."""
         await self.conn.commit()
 
+    async def delete_message(self, msg_id: str):
+        """Delete a single message by id."""
+        await self.conn.execute(
+            "DELETE FROM agent_messages WHERE id = ?", (msg_id,)
+        )
+        await self.conn.commit()
+
     async def get_messages(self, conv_id: str) -> list[dict]:
         cursor = await self.conn.execute(
             "SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY created_at ASC",
