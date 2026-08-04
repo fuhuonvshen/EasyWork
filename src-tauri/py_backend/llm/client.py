@@ -1,4 +1,4 @@
-"""Unified LLM client — supports DeepSeek (cloud) and llama.cpp (local)."""
+"""Unified LLM client — supports any OpenAI-compatible online API and llama.cpp (local)."""
 
 from __future__ import annotations
 
@@ -39,8 +39,8 @@ async def llm_chat(
 
     kwargs: overrides for model parameters (temperature, max_tokens, top_p, etc.)
     """
-    if _cfg.LLM_BACKEND == "deepseek":
-        return await _deepseek_chat(messages, tools, timeout=timeout, **kwargs)
+    if _cfg.LLM_BACKEND == "online":
+        return await _online_chat(messages, tools, timeout=timeout, **kwargs)
     elif _cfg.LLM_BACKEND == "llamacpp":
         return await _llamacpp_chat(messages, tools, timeout=timeout, **kwargs)
     else:
@@ -64,28 +64,33 @@ async def llm_chat_text(
     except LLMError:
         return ""
 
-# ── DeepSeek backend ──────────────────────────────────────────
+# ── Online backend (any OpenAI-compatible API) ────────────────
 
-def _build_deepseek_headers() -> dict:
+def _build_openai_headers() -> dict:
     return {
-        "Authorization": f"Bearer {_cfg.DEEPSEEK_API_KEY}",
+        "Authorization": f"Bearer {_cfg.ONLINE_API_KEY}",
         "Content-Type": "application/json",
     }
 
 
-async def _deepseek_chat(
+async def _online_chat(
     messages: list[dict],
     tools: list[dict] | None = None,
     *,
     timeout: int | None = None,
     **kwargs,
 ) -> dict | None:
-    url = f"{_cfg.DEEPSEEK_BASE_URL}/v1/chat/completions"
+    # 兼容用户填入带 /v1 的完整地址（如阿里云 compatible-mode/v1），
+    # 避免拼出 /v1/v1/chat/completions 导致 404
+    base = _cfg.ONLINE_BASE_URL.rstrip("/")
+    if base.endswith("/v1"):
+        base = base[:-3]
+    url = f"{base}/v1/chat/completions"
 
     clean_messages = _clean_messages_for_openai(messages)
 
     body: dict = {
-        "model": _cfg.DEEPSEEK_MODEL,
+        "model": _cfg.ONLINE_MODEL,
         "messages": clean_messages,
         "max_tokens": 4096,
         "stream": False,
@@ -95,49 +100,49 @@ async def _deepseek_chat(
         body["tool_choice"] = "auto"
     body.update(kwargs)
 
-    req_timeout = timeout or _cfg.DEEPSEEK_TIMEOUT
+    req_timeout = timeout or _cfg.ONLINE_TIMEOUT
     max_retries = 2
     for attempt in range(max_retries):
-        _log_request("deepseek", clean_messages, _cfg.DEEPSEEK_MODEL)
+        _log_request("online", clean_messages, _cfg.ONLINE_MODEL)
         t0 = time.time()
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(req_timeout)) as client:
                 resp = await client.post(
                     url,
                     json=body,
-                    headers=_build_deepseek_headers(),
+                    headers=_build_openai_headers(),
                 )
             resp.raise_for_status()
             data = resp.json()
             choice = data.get("choices", [{}])[0]
             msg = choice.get("message", {})
             elapsed = time.time() - t0
-            _log_response("deepseek", msg, data.get("usage", {}).get("completion_tokens"))
-            logger.info("[deepseek] done in %.1fs, tokens=%s", elapsed, data.get("usage", {}).get("completion_tokens"))
+            _log_response("online", msg, data.get("usage", {}).get("completion_tokens"))
+            logger.info("[online] done in %.1fs, tokens=%s", elapsed, data.get("usage", {}).get("completion_tokens"))
             return msg
         except httpx.TimeoutException:
             elapsed = time.time() - t0
-            logger.error("DeepSeek request timed out (%.1fs, attempt %d/%d)", elapsed, attempt + 1, max_retries)
+            logger.error("在线模型请求超时 (%.1fs, attempt %d/%d)", elapsed, attempt + 1, max_retries)
             if attempt < max_retries - 1:
                 await asyncio.sleep(1)
                 continue
             raise LLMTimeoutError("请求超时，请检查网络连接")
         except json.JSONDecodeError:
-            logger.error("DeepSeek returned non-JSON response: %s", resp.text[:500])
+            logger.error("在线模型返回非 JSON 响应: %s", resp.text[:500])
             raise LLMAPiError("API 返回了非 JSON 格式的响应")
         except httpx.HTTPStatusError as e:
             status = e.response.status_code
             detail = e.response.text[:300]
-            logger.error("DeepSeek HTTP %s: %s (attempt %d/%d)", status, detail, attempt + 1, max_retries)
+            logger.error("在线模型 HTTP %s: %s (attempt %d/%d)", status, detail, attempt + 1, max_retries)
             if status in (429, 503) and attempt < max_retries - 1:
                 await asyncio.sleep(1.5)
                 continue
             if status == 401:
-                raise LLMAuthError("DeepSeek API Key 无效，请在设置中检查")
+                raise LLMAuthError("在线模型 API Key 无效，请在设置中检查")
             err_cls = LLMOverloadError if status in (429, 503) else LLMAPiError
-            raise err_cls(f"DeepSeek 返回错误 {status}")
+            raise err_cls(f"在线模型返回错误 {status}")
         except Exception as e:
-            logger.error("DeepSeek request failed: %s (attempt %d/%d)", e, attempt + 1, max_retries)
+            logger.error("在线模型请求失败: %s (attempt %d/%d)", e, attempt + 1, max_retries)
             if attempt < max_retries - 1:
                 await asyncio.sleep(1)
                 continue
@@ -145,7 +150,7 @@ async def _deepseek_chat(
 
 
 def _clean_messages_for_openai(messages: list[dict]) -> list[dict]:
-    """Convert internal messages to OpenAI/DeepSeek format."""
+    """Convert internal messages to OpenAI-compatible format."""
     cleaned = []
 
     for m in messages:
@@ -213,7 +218,9 @@ async def _llamacpp_chat(
         _log_request("llamacpp", clean_messages, _cfg.LLAMACPP_MODEL)
         t0 = time.time()
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(req_timeout)) as client:
+            # trust_env=False: llama.cpp 是本地服务，不能被系统代理(Clash 等)
+            # 劫持，否则请求会被代理以 502 拒绝。
+            async with httpx.AsyncClient(timeout=httpx.Timeout(req_timeout), trust_env=False) as client:
                 resp = await client.post(url, json=body)
             resp.raise_for_status()
             data = resp.json()

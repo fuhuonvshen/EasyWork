@@ -31,14 +31,14 @@ async def load_llm_settings_from_db():
 
     FIELD_MAP = {
         "agent_llm_backend": "LLM_BACKEND",
-        "agent_online_key": "DEEPSEEK_API_KEY",
-        "agent_online_model": "DEEPSEEK_MODEL",
-        "agent_online_url": "DEEPSEEK_BASE_URL",
+        "agent_online_key": "ONLINE_API_KEY",
+        "agent_online_model": "ONLINE_MODEL",
+        "agent_online_url": "ONLINE_BASE_URL",
     }
 
     # Translate frontend values to internal config values
     VALUE_MAP: dict[str, dict[str, str]] = {
-        "LLM_BACKEND": {"local": "llamacpp", "online": "deepseek"},
+        "LLM_BACKEND": {"local": "llamacpp", "online": "online"},
     }
 
     try:

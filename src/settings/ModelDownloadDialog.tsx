@@ -413,7 +413,7 @@ export default function ModelDownloadDialog({
                       <input type="text"
                         value={agentSettings["agent_online_model"] || ""}
                         onChange={(e) => updateAgentSetting("agent_online_model", e.target.value)}
-                        placeholder="gpt-4o" className="mt-1 w-full px-3 py-2 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg"
+                        placeholder="例如 qwen-plus / gpt-4o / deepseek-chat" className="mt-1 w-full px-3 py-2 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg"
                       />
                     </div>
                     <div>
@@ -421,10 +421,12 @@ export default function ModelDownloadDialog({
                       <input type="text"
                         value={agentSettings["agent_online_url"] || ""}
                         onChange={(e) => updateAgentSetting("agent_online_url", e.target.value)}
-                        placeholder="https://api.openai.com" className="mt-1 w-full px-3 py-2 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg"
+                        placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1" className="mt-1 w-full px-3 py-2 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg"
                       />
                     </div>
-                    <p className="text-[10px] text-gray-400 -mt-1">填写后立即保存，重启EasyWork后生效</p>
+                    <p className="text-[10px] text-gray-400 -mt-1">
+                      支持任意 OpenAI 兼容接口（DeepSeek / 阿里云百炼 / OpenAI 等），地址可含或省略末尾 /v1。保存后重启 EasyWork 生效
+                    </p>
                   </>
                 )}
               </div>

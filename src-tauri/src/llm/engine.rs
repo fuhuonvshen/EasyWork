@@ -538,7 +538,11 @@ impl LlmEngine {
             log::info!("Downloading GGUF model: {}", url);
             match client.get(url).send().await {
                 Ok(response) => {
-                    let total = response.content_length().unwrap_or(0);
+                    // Some CDNs/proxies stream without content-length; fall back
+                    // to the known model size so the progress bar stays smooth.
+                    let total = response.content_length()
+                        .or_else(|| models::get_size_bytes(name))
+                        .unwrap_or(0);
                     self.total_bytes.store(total, Ordering::SeqCst);
 
                     let mut stream = response.bytes_stream();

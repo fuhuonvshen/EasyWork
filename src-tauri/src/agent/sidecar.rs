@@ -90,7 +90,7 @@ pub fn find_available_port(start_port: u16, max_attempts: u16) -> Option<u16> {
 }
 
 /// Spawn the Python agent server.
-/// Uses local llama-server by default; can use DeepSeek online if configured in settings.
+/// Uses local llama-server by default; can use any OpenAI-compatible online API if configured.
 /// If `bundled_agent` is provided and exists, runs it directly instead of system Python.
 pub async fn spawn_python_server(
     project_dir: &std::path::Path,
@@ -169,16 +169,16 @@ fn set_llm_env(
 ) {
     match llm_backend {
         "online" => {
-            cmd.env("LLM_BACKEND", "deepseek")
-                .env("DEEPSEEK_BASE_URL", settings.get("agent_online_url")
+            cmd.env("LLM_BACKEND", "online")
+                .env("ONLINE_BASE_URL", settings.get("agent_online_url")
                     .filter(|s| !s.is_empty())
                     .map(|s| s.as_str())
                     .unwrap_or("https://api.openai.com"))
-                .env("DEEPSEEK_MODEL", settings.get("agent_online_model")
+                .env("ONLINE_MODEL", settings.get("agent_online_model")
                     .filter(|s| !s.is_empty())
                     .map(|s| s.as_str())
                     .unwrap_or("gpt-4o"))
-                .env("DEEPSEEK_API_KEY", settings.get("agent_online_key")
+                .env("ONLINE_API_KEY", settings.get("agent_online_key")
                     .filter(|s| !s.is_empty())
                     .map(|s| s.as_str())
                     .unwrap_or(""));

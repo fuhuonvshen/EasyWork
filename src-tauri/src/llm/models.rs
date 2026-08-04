@@ -83,6 +83,11 @@ pub fn get_gguf_filename(name: &str) -> Option<&'static str> {
     MODELS.iter().find(|m| m.name == name).map(|m| m.gguf_file)
 }
 
+/// 获取模型文件大小（下载源不返回 content-length 时用于进度估算）
+pub fn get_size_bytes(name: &str) -> Option<u64> {
+    MODELS.iter().find(|m| m.name == name).map(|m| m.size_bytes)
+}
+
 /// 获取下载 URL（优先镜像）
 pub fn get_download_url(name: &str) -> Option<&'static str> {
     // Use the first URL that's not empty in practice

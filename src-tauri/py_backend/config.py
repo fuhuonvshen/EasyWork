@@ -24,14 +24,14 @@ _IN_BUNDLE = getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
 # Server
 AGENT_PORT = int(os.environ.get("AGENT_PORT", "9876"))
 
-# LLM backend: "deepseek" or "llamacpp"
-LLM_BACKEND = os.environ.get("LLM_BACKEND", "deepseek")
+# LLM backend: "online" (OpenAI-compatible API) or "llamacpp" (local)
+LLM_BACKEND = os.environ.get("LLM_BACKEND", "online")
 
-# DeepSeek (OpenAI-compatible API)
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
-DEEPSEEK_TIMEOUT = int(os.environ.get("DEEPSEEK_TIMEOUT", "180"))
+# Online API (OpenAI-compatible: DeepSeek / 阿里云百炼 / OpenAI 等)
+ONLINE_API_KEY = os.environ.get("ONLINE_API_KEY", "")
+ONLINE_BASE_URL = os.environ.get("ONLINE_BASE_URL", "https://api.deepseek.com")
+ONLINE_MODEL = os.environ.get("ONLINE_MODEL", "deepseek-chat")
+ONLINE_TIMEOUT = int(os.environ.get("ONLINE_TIMEOUT", "180"))
 
 # llama.cpp (OpenAI-compatible, built-in)
 LLAMACPP_URL = os.environ.get("LLAMACPP_URL", "http://127.0.0.1:11435")

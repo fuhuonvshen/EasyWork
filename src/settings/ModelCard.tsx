@@ -106,8 +106,12 @@ export default function ModelCard({
             </div>
           </div>
           <div className={`w-full h-1.5 ${c.barBg} rounded-full overflow-hidden`}>
-            <div className={`h-full ${c.barFill} rounded-full transition-all duration-300`}
-              style={{ width: `${p.totalBytes > 0 ? p.downloadProgress : Math.min(99, (p.downloadedBytes % 100))}%` }} />
+            {p.totalBytes > 0 ? (
+              <div className={`h-full ${c.barFill} rounded-full transition-all duration-300`}
+                style={{ width: `${p.downloadProgress}%` }} />
+            ) : (
+              <div className={`h-full w-1/2 ${c.barFill} rounded-full animate-pulse`} />
+            )}
           </div>
         </div>
       )}
