@@ -46,7 +46,7 @@ export default function AgentChat({ conversationId, onConversationUpdate }: Prop
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [stream, setStream] = useState<{ text: string; thinking: string; toolStatus: string | null } | null>(null);
+  const [stream, setStream] = useState<{ text: string; thinking: string; plan: string; toolStatus: string | null } | null>(null);
   const [thinkingCollapsed, setThinkingCollapsed] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -153,7 +153,7 @@ export default function AgentChat({ conversationId, onConversationUpdate }: Prop
     if (!text || sending) return;
     setInput("");
     setSending(true);
-    setStream({ text: "", thinking: "", toolStatus: null });
+    setStream({ text: "", thinking: "", plan: "", toolStatus: null });
     const convId = conversationId;
 
     // Immediately show user message optimistically
@@ -173,11 +173,21 @@ export default function AgentChat({ conversationId, onConversationUpdate }: Prop
       unlisten = await listen<AgentStreamEvent>("agent-stream", (e) => {
         const p = e.payload;
         if (p.conversation_id !== convId) return; // stale events after conversation switch
-        if (p.type === "plan" || p.type === "thinking") {
-          // 计划与模型思考合并进可折叠思考区
+        if (p.type === "thinking") {
+          // 思考区只放模型推理（灰色可折叠）
           setStream((s) => (s ? { ...s, thinking: s.thinking + p.delta } : s));
+        } else if (p.type === "plan") {
+          // 计划单独累积，在首个 answer 到达时格式化进正文
+          setStream((s) => (s ? { ...s, plan: s.plan + p.delta } : s));
         } else if (p.type === "answer") {
-          setStream((s) => (s ? { ...s, text: s.text + p.delta } : s));
+          setStream((s) => {
+            if (!s) return s;
+            let text = s.text;
+            if (s.plan) {
+              text += `📋 执行计划\n${s.plan}\n\n`;
+            }
+            return { ...s, text: text + p.delta, plan: "" };
+          });
         } else if (p.type === "tool") {
           setStream((s) => (s ? { ...s, toolStatus: `正在执行工具: ${p.name}` } : s));
         } else if (p.type === "tool_result") {
