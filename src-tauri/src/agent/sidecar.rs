@@ -101,8 +101,9 @@ impl AgentSidecar {
             .await
             .map_err(|e| format!("Agent 服务不可达: {}", e))?;
         if !resp.status().is_success() {
+            let status = resp.status().as_u16();
             let text = resp.text().await.unwrap_or_default();
-            return Err(format!("Agent 服务错误 ({}): {}", resp.status().as_u16(), text));
+            return Err(format!("Agent 服务错误 ({}): {}", status, text));
         }
         Ok(resp)
     }
