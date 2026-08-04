@@ -208,6 +208,7 @@ pub fn run() {
             llm::commands::llm_load_model,
             llm::commands::llm_unload_model,
             llm::commands::llm_server_status,
+            llm::commands::llm_download_binary,
             llm::commands::agent_prepare_llm,
             // ── Agent ──
             agent::commands::agent_attach_file,

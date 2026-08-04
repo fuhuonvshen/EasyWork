@@ -4,6 +4,7 @@
 use tauri::State;
 use crate::state::{DbState, LlmState};
 use crate::database;
+use crate::llm::engine::LlmEngine;
 
 #[tauri::command]
 pub async fn llm_list_models(
@@ -72,7 +73,7 @@ pub async fn llm_load_model(
 
     // Ensure binary is ready
     if !engine.is_binary_ready() {
-        return Err("请先等待 llama-server 下载完成".to_string());
+        return Err("请先在「模型管理」中下载 llama-server".to_string());
     }
 
     // Ensure model file exists
@@ -85,6 +86,33 @@ pub async fn llm_unload_model(
 ) -> Result<(), String> {
     let engine = state.0.read().await;
     engine.stop_server().await;
+    Ok(())
+}
+
+/// 手动下载 llama-server 二进制（模型管理界面触发，带进度）。
+/// 已就绪时直接返回；下载完成后重新校验 CUDA 运行库。
+#[tauri::command]
+pub async fn llm_download_binary(
+    state: State<'_, LlmState>,
+) -> Result<(), String> {
+    let engine = state.0.read().await;
+    if engine.is_binary_ready() {
+        return Ok(());
+    }
+    engine.ensure_binary().await.map_err(|e| format!("下载 llama-server 失败: {}", e))?;
+    drop(engine);
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let mut w = state.0.write().await;
+        if w.gpu_layers > 0 && !LlmEngine::has_cuda_runtime(&w.bin_dir) {
+            log::warn!("CUDA 运行库缺失，降级为 CPU 推理");
+            w.gpu_layers = 0;
+        } else if w.gpu_layers == 0 && LlmEngine::has_cuda_runtime(&w.bin_dir) {
+            log::info!("CUDA 运行库已就位，启用 GPU (gpu_layers=99)");
+            w.gpu_layers = 99;
+        }
+    }
     Ok(())
 }
 

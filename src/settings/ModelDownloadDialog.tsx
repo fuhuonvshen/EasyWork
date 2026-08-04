@@ -1,11 +1,11 @@
 // EasyWork - Model Download Dialog (Speech + LLM)
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { X, Loader, Mic, Brain, Bot, FolderOpen, AlertTriangle, Monitor, Settings } from "lucide-react";
+import { X, Loader, Mic, Brain, Bot, FolderOpen, AlertTriangle, Monitor, Settings, Cpu } from "lucide-react";
 import type { ModelInfo, SpeechModelEntry, LlmModelEntry } from "../types";
 import ModelCard from "./ModelCard";
-import { useModelDownload } from "./useModelDownload";
+import { useModelDownload, DownloadStatus } from "./useModelDownload";
 import { showToast } from "../components/Toast";
 
 // ── Confirm Delete Modal ──
@@ -138,6 +138,51 @@ export default function ModelDownloadDialog({
     initEvents: ["llm"],
   });
 
+  // ── llama-server 推理引擎二进制 ──
+  const [binaryReady, setBinaryReady] = useState(false);
+  const [binaryDownloading, setBinaryDownloading] = useState(false);
+  const [binaryStatus, setBinaryStatus] = useState<DownloadStatus | null>(null);
+  const [binaryError, setBinaryError] = useState("");
+
+  const refreshBinary = useCallback(() => {
+    invoke<{ binaryReady: boolean }>("llm_server_status")
+      .then((s) => setBinaryReady(s.binaryReady))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => { refreshBinary(); }, [refreshBinary]);
+
+  const startBinaryDownload = async () => {
+    setBinaryError("");
+    setBinaryDownloading(true);
+    setBinaryStatus(null);
+    try {
+      await invoke("llm_download_binary");
+    } catch (e) {
+      setBinaryError(typeof e === "string" ? e : "下载 llama-server 失败");
+    }
+    setBinaryDownloading(false);
+    refreshBinary();
+  };
+
+  // 二进制下载进度轮询
+  useEffect(() => {
+    if (!binaryDownloading) return;
+    const poll = async () => {
+      try {
+        const s = await invoke<DownloadStatus>("llm_download_status");
+        setBinaryStatus(s);
+        if (s.status === "complete" || s.status.startsWith("error:")) {
+          setBinaryDownloading(false);
+          refreshBinary();
+        }
+      } catch {}
+    };
+    poll();
+    const t = setInterval(poll, 500);
+    return () => clearInterval(t);
+  }, [binaryDownloading, refreshBinary]);
+
   // ── Settings ──
   useEffect(() => {
     invoke<Record<string, string>>("get_settings")
@@ -181,6 +226,45 @@ export default function ModelDownloadDialog({
     if (llm.loading) return null;
     return (
       <div className="space-y-2">
+        {/* 推理引擎 (llama-server) — macOS 内置即就绪，Windows 需手动下载 */}
+        <div className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50">
+          <div className="flex items-center gap-2 min-w-0">
+            <Cpu size={14} className="text-gray-500 flex-shrink-0" />
+            <span className="text-xs font-medium text-gray-700">推理引擎 (llama-server)</span>
+            {binaryReady ? (
+              <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded flex-shrink-0">已就绪</span>
+            ) : (
+              <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded flex-shrink-0">未安装</span>
+            )}
+          </div>
+          {!binaryReady && (
+            <button
+              onClick={startBinaryDownload}
+              disabled={binaryDownloading}
+              className="flex-shrink-0 px-3 py-1 text-xs font-medium text-white bg-violet-500 rounded-lg hover:bg-violet-600 disabled:opacity-50 transition-colors"
+            >
+              {binaryDownloading ? "下载中..." : "下载"}
+            </button>
+          )}
+        </div>
+        {binaryDownloading && (
+          <div className="px-1">
+            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className={`h-full ${binaryStatus && binaryStatus.totalBytes > 0 ? "bg-violet-500 rounded-full transition-all duration-300" : "w-1/2 bg-violet-500 rounded-full animate-pulse"}`}
+                style={binaryStatus && binaryStatus.totalBytes > 0 ? { width: `${binaryStatus.progress}%` } : undefined}
+              />
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1">
+              {binaryStatus && binaryStatus.totalBytes > 0
+                ? `${binaryStatus.progress}% · ${(binaryStatus.speed / 1024 / 1024).toFixed(1)} MB/s`
+                : "正在下载（约 60-80 MB）..."}
+            </p>
+          </div>
+        )}
+        {binaryError && (
+          <div className="p-2 rounded-lg bg-red-50 border border-red-100 text-[11px] text-red-600">{binaryError}</div>
+        )}
         {llm.models.map((m) => (
           <ModelCard
             key={m.name}

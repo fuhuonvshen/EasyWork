@@ -85,6 +85,19 @@ jobs:
             --exclude matplotlib --exclude IPython --exclude PyQt5 --exclude PySide6 \
             --noconfirm --clean -p .
 
+      - name: Download llama-server (macOS, bundled into installer)
+        if: matrix.os == 'macos-latest'
+        run: |
+          mkdir -p src-tauri/binaries
+          curl -fL -o /tmp/llama-macos.tar.gz "https://github.com/ggml-org/llama.cpp/releases/download/b10034/llama-b10034-bin-macos-arm64.tar.gz"
+          tar -xzf /tmp/llama-macos.tar.gz -C src-tauri/binaries
+          # 把符号链接转成真实文件，避免打包后 bin 目录里链接失效
+          cd src-tauri/binaries
+          for f in *; do
+            if [ -L "$f" ]; then cp -L "$f" "$f.tmp" && mv -f "$f.tmp" "$f"; fi
+          done
+          ls -la | grep -E "llama-server|dylib" | head -15
+
       - name: Download sherpa-onnx MD prebuilt libs (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh

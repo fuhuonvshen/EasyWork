@@ -38,7 +38,7 @@ pub async fn generate_minutes(
             } else {
                 let eng = engine.read().await;
                 if !eng.is_binary_ready() {
-                    return Err(anyhow::anyhow!("llama-server 正在下载，请稍后重试"));
+                    return Err(anyhow::anyhow!("llama-server 未就绪，请在「模型管理」中下载后使用"));
                 } else {
                     return Err(anyhow::anyhow!("未下载本地模型，请在「模型管理」中下载后使用"));
                 }

@@ -54,25 +54,10 @@ pub async fn init(models_dir: &Path, bin_dir: &Path, resource_dir: Option<&Path>
         }
     }
 
-    // Download from GitHub as last resort
+    // 不再自动下载：缺少二进制时由用户在「模型管理」中手动下载，
+    // 以便展示下载进度（Windows 常见场景）。
     if !binary_copied {
-        log::info!("llama-server 二进制不存在，正在从 GitHub 下载...");
-        let eng = engine.clone();
-        tokio::spawn(async move {
-            if let Err(e) = eng.read().await.ensure_binary().await {
-                log::error!("llama-server 下载失败: {}", e);
-            }
-            // Download finished (or not) — verify CUDA runtime again;
-            // the CUDA archive brings its own runtime DLLs.
-            #[cfg(not(target_os = "macos"))]
-            {
-                let mut w = eng.write().await;
-                if w.gpu_layers == 0 && LlmEngine::has_cuda_runtime(&w.bin_dir) {
-                    log::info!("CUDA 运行库已就位，启用 GPU (gpu_layers=99)");
-                    w.gpu_layers = 99;
-                }
-            }
-        });
+        log::info!("llama-server 二进制缺失，等待用户在模型管理中下载");
     }
 
     // 4. Synchronous copy paths only: verify the CUDA runtime DLL actually

@@ -119,7 +119,8 @@ impl LlmEngine {
 
             let is_binary = cfg!(target_os = "windows")
                 && (name.ends_with(".exe") || name.ends_with(".dll"))
-                || (!cfg!(target_os = "windows") && name == "llama-server");
+                || (!cfg!(target_os = "windows")
+                    && (name == "llama-server" || name.ends_with(".dylib")));
             if !is_binary {
                 continue;
             }
@@ -223,8 +224,15 @@ impl LlmEngine {
 
     /// Download llama-server archive and extract executable + companion files into bin_dir.
     /// `is_targz` selects .tar.gz (macOS) vs .zip (Windows/Linux) handling.
+    /// Streams with progress so the frontend can show a download bar.
     async fn download_and_extract(&self, url: &str, is_targz: bool) -> Result<()> {
         log::info!("Downloading llama-server from {}", url);
+        self.set_status("downloading");
+        self.download_progress.store(0, Ordering::SeqCst);
+        self.downloaded_bytes.store(0, Ordering::SeqCst);
+        self.total_bytes.store(0, Ordering::SeqCst);
+        self.download_speed.store(0, Ordering::SeqCst);
+
         let response = reqwest::get(url)
             .await
             .context("下载 llama-server 失败")?;
@@ -233,17 +241,42 @@ impl LlmEngine {
             anyhow::bail!("HTTP {}", response.status());
         }
 
-        let bytes = response.bytes()
-            .await
-            .context("读取 llama-server 响应失败")?;
+        let total = response.content_length().unwrap_or(0);
+        self.total_bytes.store(total, Ordering::SeqCst);
 
         let tmp_path = self.bin_dir.join("llama-server-tmp.archive");
-        tokio::fs::write(&tmp_path, &bytes)
+        let mut file = tokio::fs::File::create(&tmp_path)
             .await
-            .context("保存下载文件失败")?;
+            .context("创建临时文件失败")?;
+
+        use tokio::io::AsyncWriteExt;
+        let mut stream = response.bytes_stream();
+        let mut downloaded: u64 = 0;
+        let mut last_time = std::time::Instant::now();
+        let mut bytes_since_last: u64 = 0;
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.context("读取下载流失败")?;
+            file.write_all(&chunk).await?;
+            downloaded += chunk.len() as u64;
+            bytes_since_last += chunk.len() as u64;
+
+            if total > 0 {
+                self.download_progress.store((downloaded * 100 / total) as u8, Ordering::SeqCst);
+            }
+            self.downloaded_bytes.store(downloaded, Ordering::SeqCst);
+
+            let elapsed = last_time.elapsed().as_secs_f32();
+            if elapsed >= 1.0 {
+                self.download_speed.store((bytes_since_last as f32 / elapsed) as u64, Ordering::SeqCst);
+                bytes_since_last = 0;
+                last_time = std::time::Instant::now();
+            }
+        }
+        file.flush().await?;
+        drop(file);
 
         let file = std::fs::File::open(&tmp_path)?;
-        let file_len = bytes.len();
+        let file_len = downloaded as usize;
 
         if is_targz {
             // macOS: tar.gz 格式 — 扁平解压 llama-server + 全部 .dylib 依赖库
@@ -299,6 +332,8 @@ impl LlmEngine {
         }
 
         let _ = std::fs::remove_file(&tmp_path);
+        self.set_status("complete");
+        self.download_progress.store(100, Ordering::SeqCst);
         log::info!("llama-server downloaded & extracted to {:?}", self.bin_dir);
         Ok(())
     }
@@ -320,7 +355,7 @@ impl LlmEngine {
         let ngl = self.gpu_layers;
         let bin_path = self.bin_path();
         if !bin_path.exists() {
-            return Err(anyhow::anyhow!("llama-server 未就绪，请先下载"));
+            return Err(anyhow::anyhow!("llama-server 未就绪，请在「模型管理」中下载"));
         }
 
         // Try GPU mode first, fall back to CPU on CUDA init failure

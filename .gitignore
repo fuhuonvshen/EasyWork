@@ -60,3 +60,6 @@ src-tauri/.cargo/config.toml.bak
 src-tauri/build/
 src-tauri/gen/
 src-tauri/easywork-build/
+
+# Debug logs
+agent_debug.log
