@@ -131,11 +131,12 @@ jobs:
           fi
           # Strip PEM headers, keep raw base64
           raw_key=$(grep -v '^-----' <<< "$TSK" | tr -d '\n')
-          signature=$(npx tauri signer sign \
+          # tauri signer 自动生成 <installer>.sig；其 stdout 是提示消息而非签名，
+          # 不能 echo 回写 .sig（会污染签名导致应用内更新校验失败）
+          npx tauri signer sign \
             --private-key "$raw_key" \
             --password "$TSPW" \
-            "$installer")
-          echo "$signature" > "${installer}.sig"
+            "$installer"
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
