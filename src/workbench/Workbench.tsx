@@ -1,6 +1,7 @@
 // EasyWork - Workbench (landing page)
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FileText, Video, Bot, LayoutGrid, Settings } from "lucide-react";
+import { getVersion } from "@tauri-apps/api/app";
 import ModelDownloadDialog from "../settings/ModelDownloadDialog";
 
 const WORKBENCH_CARDS = [
@@ -44,6 +45,10 @@ const WORKBENCH_CARDS = [
 
 export default function Workbench({ onEnter }: { onEnter: (title?: string, action?: string) => void }) {
   const [showModel, setShowModel] = useState(false);
+  const [appVersion, setAppVersion] = useState("");
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => setAppVersion(""));
+  }, []);
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
@@ -97,7 +102,8 @@ export default function Workbench({ onEnter }: { onEnter: (title?: string, actio
       </div>
 
       {/* Bottom bar */}
-      <div className="flex items-center justify-end px-8 py-3 flex-shrink-0">
+      <div className="flex items-center justify-between px-8 py-3 flex-shrink-0">
+        <span className="text-xs text-gray-300 select-none">EasyWork v{appVersion}</span>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowModel(true)}
