@@ -14,13 +14,13 @@ interface Props {
   onConversationUpdate: () => void;
 }
 
-// DeepSeek 风格的可折叠思考过程块（历史消息中的 role='thinking'）
-function MessageThinking({ content }: { content: string }) {
+// DeepSeek 风格的可折叠过程块（执行计划 / 思考过程，灰色小字）
+function MessageCollapsible({ title, icon, content }: { title: string; icon: string; content: string }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="flex gap-3 text-sm">
       <div className="w-7 h-7 rounded-full bg-gray-50 flex items-center justify-center flex-shrink-0 mt-0.5">
-        <span className="text-xs text-gray-400">💭</span>
+        <span className="text-xs">{icon}</span>
       </div>
       <div className="max-w-[75%]">
         <button
@@ -28,7 +28,7 @@ function MessageThinking({ content }: { content: string }) {
           className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 cursor-pointer"
         >
           <ChevronDown size={12} className={`transition-transform ${open ? "" : "-rotate-90"}`} />
-          思考过程
+          {title}
         </button>
         {open && (
           <div className="mt-1 text-xs text-gray-400 whitespace-pre-wrap border-l-2 border-gray-200 pl-2 max-h-48 overflow-y-auto">
@@ -46,7 +46,7 @@ export default function AgentChat({ conversationId, onConversationUpdate }: Prop
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [stream, setStream] = useState<{ text: string; thinking: string; plan: string; toolStatus: string | null } | null>(null);
+  const [stream, setStream] = useState<{ text: string; thinking: string; toolStatus: string | null } | null>(null);
   const [thinkingCollapsed, setThinkingCollapsed] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -153,7 +153,7 @@ export default function AgentChat({ conversationId, onConversationUpdate }: Prop
     if (!text || sending) return;
     setInput("");
     setSending(true);
-    setStream({ text: "", thinking: "", plan: "", toolStatus: null });
+    setStream({ text: "", thinking: "", toolStatus: null });
     const convId = conversationId;
 
     // Immediately show user message optimistically
@@ -173,21 +173,11 @@ export default function AgentChat({ conversationId, onConversationUpdate }: Prop
       unlisten = await listen<AgentStreamEvent>("agent-stream", (e) => {
         const p = e.payload;
         if (p.conversation_id !== convId) return; // stale events after conversation switch
-        if (p.type === "thinking") {
-          // 思考区只放模型推理（灰色可折叠）
+        if (p.type === "plan" || p.type === "thinking") {
+          // 计划与模型思考合并进可折叠思考区
           setStream((s) => (s ? { ...s, thinking: s.thinking + p.delta } : s));
-        } else if (p.type === "plan") {
-          // 计划单独累积，在首个 answer 到达时格式化进正文
-          setStream((s) => (s ? { ...s, plan: s.plan + p.delta } : s));
         } else if (p.type === "answer") {
-          setStream((s) => {
-            if (!s) return s;
-            let text = s.text;
-            if (s.plan) {
-              text += `📋 执行计划\n${s.plan}\n\n`;
-            }
-            return { ...s, text: text + p.delta, plan: "" };
-          });
+          setStream((s) => (s ? { ...s, text: s.text + p.delta } : s));
         } else if (p.type === "tool") {
           setStream((s) => (s ? { ...s, toolStatus: `正在执行工具: ${p.name}` } : s));
         } else if (p.type === "tool_result") {
@@ -246,7 +236,13 @@ export default function AgentChat({ conversationId, onConversationUpdate }: Prop
           {messages.map((msg) => {
             // Thinking messages: collapsible gray block (DeepSeek-style)
             if (msg.role === "thinking") {
-              return <MessageThinking key={msg.id} content={msg.content} />;
+              return <MessageCollapsible key={msg.id} title="思考过程" icon="💭" content={msg.content} />;
+            }
+
+            // 执行计划消息：折叠块显示，不占独立气泡
+            if (msg.role === "assistant" && msg.content.startsWith("执行计划")) {
+              const plan = msg.content.replace(/^执行计划\n?/, "");
+              return <MessageCollapsible key={msg.id} title="执行计划" icon="📋" content={plan} />;
             }
 
             // Tool messages: show as compact pills
