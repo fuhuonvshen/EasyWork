@@ -51,7 +51,11 @@ async def chat(req: ChatRequest, skills: SkillRegistry) -> ChatResponse:
     # ═══ Phase 1: Plan ═══
     _t1 = _time.time()
     logger.info("[chat] Phase 1 PLAN — %d messages, ~%d tokens", len(messages) + 1, _ctx_tokens)
-    plan_msgs = [{"role": "system", "content": plan_instr}] + messages
+    # 多条 system 会让 llama.cpp reasoning-format 400，plan_instr 合并进首条 system
+    if messages and messages[0]["role"] == "system":
+        plan_msgs = [{"role": "system", "content": plan_instr + "\n\n" + messages[0]["content"]}] + messages[1:]
+    else:
+        plan_msgs = [{"role": "system", "content": plan_instr}] + messages
     plan_content = await llm_chat_text(plan_msgs, temperature=0.2, max_tokens=2048)
     _t2 = _time.time()
     if not plan_content:
@@ -340,7 +344,12 @@ async def chat_stream(req: ChatRequest, skills: SkillRegistry) -> AsyncGenerator
 
     try:
         # ═══ Phase 1: Plan (streamed) ═══
-        plan_msgs = [{"role": "system", "content": plan_instr}] + messages
+        # plan_instr 合并进已有的 system 消息——多条 system 会让 llama.cpp
+        # reasoning-format 返回 400 "System message must be at the beginning"
+        if messages and messages[0]["role"] == "system":
+            plan_msgs = [{"role": "system", "content": plan_instr + "\n\n" + messages[0]["content"]}] + messages[1:]
+        else:
+            plan_msgs = [{"role": "system", "content": plan_instr}] + messages
         plan_parts: list[str] = []
         try:
             async for ev in llm_chat_stream(plan_msgs, temperature=0.2, max_tokens=2048):
