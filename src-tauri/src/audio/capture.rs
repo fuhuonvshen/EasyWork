@@ -7,6 +7,27 @@
 //                        → mpsc   → 实时转写 worker
 
 use anyhow::{Context, Result};
+
+/// macOS 上显式请求麦克风权限（必须在主线程调用）。
+///
+/// cpal (AVAudioEngine) 不会自动触发系统的麦克风权限弹窗，而未授权时
+/// macOS 静默输出静音（不报错），导致录音无声音且系统权限列表里
+/// 看不到本应用。这里通过 AVAudioApplication.requestRecordPermission
+/// (macOS 14+) 显式触发 TCC 权限弹窗并等待用户选择。
+#[cfg(target_os = "macos")]
+pub fn request_mic_permission_sync() -> bool {
+    use objc2_avf_audio::{AVAudioApplication, AVAudioApplicationRecordPermission};
+    use objc2_foundation::MainThreadMarker;
+
+    let Some(marker) = MainThreadMarker::new() else {
+        log::error!("request_mic_permission 必须在主线程调用");
+        return false;
+    };
+    unsafe {
+        let status = AVAudioApplication::requestRecordPermission(marker);
+        status == AVAudioApplicationRecordPermission::Granted
+    }
+}
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::traits::{Consumer, Producer, Split};
 use ringbuf::HeapRb;
