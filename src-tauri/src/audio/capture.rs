@@ -29,17 +29,27 @@ pub fn request_mic_permission(tx: tokio::sync::oneshot::Sender<bool>) {
     unsafe {
         let app = AVAudioApplication::sharedInstance();
         let current = app.recordPermission();
+        log::info!("[macos-permission] recordPermission status raw: {:?}", current.0);
         if current == AVAudioApplicationRecordPermission::Granted {
+            log::info!("[macos-permission] 已授权");
             let _ = tx.send(true);
             return;
         }
         if current == AVAudioApplicationRecordPermission::Denied {
+            log::info!("[macos-permission] 已拒绝（可能需 tccutil reset Microphone com.easywork）");
             let _ = tx.send(false);
             return;
         }
         // Undetermined — 弹系统权限框，回调异步返回结果
+        // oneshot::Sender::send 消费自身 → 闭包只能 FnOnce，而 block2 要求 Fn。
+        // 用 Arc<Mutex<Option<..>>> 包装，闭包捕获 Arc（可重复调用），take 一次。
+        log::info!("[macos-permission] 未决定，触发系统权限弹窗");
+        let tx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
         let block = RcBlock::new(move |granted: Bool| {
-            let _ = tx.send(granted.as_bool());
+            log::info!("[macos-permission] 权限回调: granted={}", granted.as_bool());
+            if let Some(t) = tx.lock().unwrap().take() {
+                let _ = t.send(granted.as_bool());
+            }
         });
         AVAudioApplication::requestRecordPermissionWithCompletionHandler(&block);
     }
