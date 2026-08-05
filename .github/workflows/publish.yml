@@ -112,6 +112,17 @@ jobs:
           tar -xjf "${{ github.workspace }}\src-tauri\target\sherpa-onnx-prebuilt\$pkg.tar.bz2" -C "${{ github.workspace }}\src-tauri\target\sherpa-onnx-prebuilt"
           echo "SHERPA_ONNX_LIB_DIR=$libdir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
+      - name: Diagnose + clear broken cargo cache (macOS arm64 runner)
+        if: matrix.os == 'macos-latest'
+        run: |
+          echo "uname: $(uname -m)"
+          rustc -vV | grep host
+          # GitHub arm64 runner 镜像预缓存的 cargo registry 存在 x86_64
+          # 产物，zstd-safe build script 会报 "cannot execute binary file"。
+          # 清掉 registry 强制 arm64 重新下载编译。
+          rm -rf "$HOME/.cargo/registry" 2>/dev/null || true
+          rm -rf /usr/local/cargo/registry 2>/dev/null || true
+
       - name: Build Tauri app
         run: pnpm tauri build
         env:
