@@ -37,20 +37,20 @@ pub async fn start_capture(
     }
 
     // macOS: cpal 不会自动触发麦克风权限弹窗，未授权时静默录静音。
-    // 开始录制前显式请求权限（TCC 弹窗必须在主线程触发）。
+    // 开始录制前显式请求权限（TCC 弹窗必须在主线程触发；这里异步等待
+    // 回调，不阻塞主线程——阻塞会导致弹窗死锁不出现）。
     #[cfg(target_os = "macos")]
     {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let app_for_permission = app.clone();
         app_for_permission
             .run_on_main_thread(move || {
-                let granted = crate::audio::capture::request_mic_permission_sync();
-                let _ = tx.send(granted);
+                crate::audio::capture::request_mic_permission(tx);
             })
             .map_err(|e| format!("请求麦克风权限失败: {}", e))?;
         let granted = rx
             .await
-            .map_err(|_| "请求麦克风权限失败（超时）".to_string())?;
+            .map_err(|_| "请求麦克风权限失败（回调未返回）".to_string())?;
         if !granted {
             return Err("需要麦克风权限：请在系统设置 → 隐私与安全性 → 麦克风中允许 EasyWork 后重试".into());
         }

@@ -8,43 +8,40 @@
 
 use anyhow::{Context, Result};
 
-/// macOS 上显式请求麦克风权限（必须在主线程调用）。
+/// macOS 上请求麦克风权限（必须在主线程调用，结果通过 oneshot 异步返回）。
 ///
 /// cpal (AVAudioEngine) 不会自动触发系统的麦克风权限弹窗，而未授权时
-/// macOS 静默输出静音（不报错），导致录音无声音且系统权限列表里
-/// 看不到本应用。这里通过 AVAudioApplication.requestRecordPermission
-/// (macOS 14+) 显式触发 TCC 权限弹窗并等待用户选择。
+/// macOS 静默输出静音（不报错）。这里通过 AVAudioApplication (macOS 14+)
+/// 显式触发 TCC 权限弹窗。**注意**：本函数只发起请求，不能同步阻塞等待
+/// 回调——TCC 弹窗与回调需要主线程空闲，阻塞会死锁导致弹窗不出现。
 #[cfg(target_os = "macos")]
-pub fn request_mic_permission_sync() -> bool {
+pub fn request_mic_permission(tx: tokio::sync::oneshot::Sender<bool>) {
     use block2::RcBlock;
     use objc2::runtime::Bool;
     use objc2_avf_audio::{AVAudioApplication, AVAudioApplicationRecordPermission};
     use objc2_foundation::MainThreadMarker;
-    use std::sync::mpsc;
 
     let Some(_marker) = MainThreadMarker::new() else {
         log::error!("request_mic_permission 必须在主线程调用");
-        return false;
+        let _ = tx.send(false);
+        return;
     };
     unsafe {
         let app = AVAudioApplication::sharedInstance();
         let current = app.recordPermission();
         if current == AVAudioApplicationRecordPermission::Granted {
-            return true;
+            let _ = tx.send(true);
+            return;
         }
         if current == AVAudioApplicationRecordPermission::Denied {
-            return false;
+            let _ = tx.send(false);
+            return;
         }
-        // Undetermined — 弹系统权限框并等待用户选择（异步回调）
-        let (tx, rx) = mpsc::channel();
+        // Undetermined — 弹系统权限框，回调异步返回结果
         let block = RcBlock::new(move |granted: Bool| {
-            let _ = tx.send(granted);
+            let _ = tx.send(granted.as_bool());
         });
         AVAudioApplication::requestRecordPermissionWithCompletionHandler(&block);
-        match rx.recv_timeout(std::time::Duration::from_secs(120)) {
-            Ok(granted) => granted.as_bool(),
-            Err(_) => false,
-        }
     }
 }
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
