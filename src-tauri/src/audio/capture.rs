@@ -16,8 +16,8 @@ use anyhow::{Context, Result};
 /// (macOS 14+) 显式触发 TCC 权限弹窗并等待用户选择。
 #[cfg(target_os = "macos")]
 pub fn request_mic_permission_sync() -> bool {
-    use block2::DynBlock;
-    use objc2::Bool;
+    use block2::RcBlock;
+    use objc2::runtime::Bool;
     use objc2_avf_audio::{AVAudioApplication, AVAudioApplicationRecordPermission};
     use objc2_foundation::MainThreadMarker;
     use std::sync::mpsc;
@@ -37,7 +37,7 @@ pub fn request_mic_permission_sync() -> bool {
         }
         // Undetermined — 弹系统权限框并等待用户选择（异步回调）
         let (tx, rx) = mpsc::channel();
-        let block = DynBlock::new(move |granted: Bool| {
+        let block = RcBlock::new(move |granted: Bool| {
             let _ = tx.send(granted);
         });
         AVAudioApplication::requestRecordPermissionWithCompletionHandler(&block);
