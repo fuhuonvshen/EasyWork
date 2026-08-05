@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import shutil
+import stat
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -221,7 +222,19 @@ def _copy_to_input(src: Path, input_dir: str) -> None:
     if os.path.normcase(os.path.abspath(str(src))) == os.path.normcase(os.path.abspath(dest)):
         logger.info("File already in agent_input: %s (skip copy)", src)
         return
+    # copy2 会连源文件的只读属性一起复制（OneDrive/微信下载的文件常带只读
+    # 标记），导致目标只读、下次同名上传覆盖时 Permission denied。先清只读
+    # 再复制，复制后同样清一次（copy2 会再次带上只读属性）。
+    if os.path.exists(dest):
+        try:
+            os.chmod(dest, stat.S_IWRITE)
+        except OSError:
+            pass
     shutil.copy2(str(src), dest)
+    try:
+        os.chmod(dest, stat.S_IWRITE)
+    except OSError:
+        pass
     logger.info("Copied %s -> %s", src, dest)
 
 

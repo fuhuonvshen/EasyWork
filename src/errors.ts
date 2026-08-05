@@ -18,6 +18,7 @@ export const ERRORS = {
   CREATE_TODO: "创建待办任务失败",
   GENERATE_REPORT: "生成报告失败",
   AGENT_CHAT: "AI 回复失败，请稍后重试",
+  UPLOAD_FILE: "文件上传失败",
   LOAD_MINUTES: "加载纪要失败",
   PARSE_MINUTES: "纪要数据解析异常，请重试",
   SAVE_MINUTES: "保存纪要失败，请重试",

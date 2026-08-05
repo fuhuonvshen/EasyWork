@@ -50,7 +50,8 @@ pub async fn start_capture(
             .map_err(|e| format!("请求麦克风权限失败: {}", e))?;
         let granted = rx
             .await
-            .map_err(|_| "请求麦克风权限失败（回调未返回）".to_string())?;
+            .map_err(|_| "请求麦克风权限失败（系统回调未返回）".to_string())?
+            .map_err(|detail| format!("麦克风权限请求失败: {}", detail))?;
         if !granted {
             return Err("需要麦克风权限：请在系统设置 → 隐私与安全性 → 麦克风中允许 EasyWork 后重试".into());
         }

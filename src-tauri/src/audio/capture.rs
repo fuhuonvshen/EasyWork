@@ -14,41 +14,39 @@ use anyhow::{Context, Result};
 /// macOS 静默输出静音（不报错）。这里通过 AVAudioApplication (macOS 14+)
 /// 显式触发 TCC 权限弹窗。**注意**：本函数只发起请求，不能同步阻塞等待
 /// 回调——TCC 弹窗与回调需要主线程空闲，阻塞会死锁导致弹窗不出现。
+/// 失败原因通过 Err 返回，前端错误提示直接展示，便于诊断。
 #[cfg(target_os = "macos")]
-pub fn request_mic_permission(tx: tokio::sync::oneshot::Sender<bool>) {
+pub fn request_mic_permission(tx: tokio::sync::oneshot::Sender<Result<bool, String>>) {
     use block2::RcBlock;
     use objc2::runtime::Bool;
     use objc2_avf_audio::{AVAudioApplication, AVAudioApplicationRecordPermission};
     use objc2_foundation::MainThreadMarker;
 
     let Some(_marker) = MainThreadMarker::new() else {
-        log::error!("request_mic_permission 必须在主线程调用");
-        let _ = tx.send(false);
+        let _ = tx.send(Err("权限请求必须在主线程调用".to_string()));
         return;
     };
     unsafe {
         let app = AVAudioApplication::sharedInstance();
         let current = app.recordPermission();
-        log::info!("[macos-permission] recordPermission status raw: {:?}", current.0);
         if current == AVAudioApplicationRecordPermission::Granted {
-            log::info!("[macos-permission] 已授权");
-            let _ = tx.send(true);
+            let _ = tx.send(Ok(true));
             return;
         }
         if current == AVAudioApplicationRecordPermission::Denied {
-            log::info!("[macos-permission] 已拒绝（可能需 tccutil reset Microphone com.easywork）");
-            let _ = tx.send(false);
+            // TCC 已有拒绝记录（可能来自旧签名版本），重置后才会重新弹窗
+            let _ = tx.send(Err(
+                "麦克风权限已被拒绝（状态 Denied）。请在终端执行 tccutil reset Microphone com.easywork 后重试".to_string(),
+            ));
             return;
         }
         // Undetermined — 弹系统权限框，回调异步返回结果
         // oneshot::Sender::send 消费自身 → 闭包只能 FnOnce，而 block2 要求 Fn。
         // 用 Arc<Mutex<Option<..>>> 包装，闭包捕获 Arc（可重复调用），take 一次。
-        log::info!("[macos-permission] 未决定，触发系统权限弹窗");
         let tx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
         let block = RcBlock::new(move |granted: Bool| {
-            log::info!("[macos-permission] 权限回调: granted={}", granted.as_bool());
             if let Some(t) = tx.lock().unwrap().take() {
-                let _ = t.send(granted.as_bool());
+                let _ = t.send(Ok(granted.as_bool()));
             }
         });
         AVAudioApplication::requestRecordPermissionWithCompletionHandler(&block);

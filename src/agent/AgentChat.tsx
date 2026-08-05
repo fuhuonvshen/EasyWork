@@ -128,7 +128,9 @@ export default function AgentChat({ conversationId, onConversationUpdate }: Prop
       onConversationUpdate();
     } catch (e) {
       console.error("File upload error:", e);
-      showToast(toUserError(ERRORS.AGENT_CHAT, e), "error");
+      // 显示后端真实错误详情（如"文件过大""无法复制文件"），便于定位
+      const detail = e instanceof Error ? e.message : String(e);
+      showToast(`${ERRORS.UPLOAD_FILE}：${detail}`, "error");
     }
     setUploading(false);
   };
@@ -142,7 +144,8 @@ export default function AgentChat({ conversationId, onConversationUpdate }: Prop
       onConversationUpdate();
     } catch (e) {
       console.error("File upload error:", e);
-      showToast(toUserError(ERRORS.AGENT_CHAT, e), "error");
+      const detail = e instanceof Error ? e.message : String(e);
+      showToast(`${ERRORS.UPLOAD_FILE}：${detail}`, "error");
     }
     setUploading(false);
   };
