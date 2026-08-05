@@ -16,16 +16,35 @@ use anyhow::{Context, Result};
 /// (macOS 14+) 显式触发 TCC 权限弹窗并等待用户选择。
 #[cfg(target_os = "macos")]
 pub fn request_mic_permission_sync() -> bool {
+    use block2::DynBlock;
+    use objc2::Bool;
     use objc2_avf_audio::{AVAudioApplication, AVAudioApplicationRecordPermission};
     use objc2_foundation::MainThreadMarker;
+    use std::sync::mpsc;
 
-    let Some(marker) = MainThreadMarker::new() else {
+    let Some(_marker) = MainThreadMarker::new() else {
         log::error!("request_mic_permission 必须在主线程调用");
         return false;
     };
     unsafe {
-        let status = AVAudioApplication::requestRecordPermission(marker);
-        status == AVAudioApplicationRecordPermission::Granted
+        let app = AVAudioApplication::sharedInstance();
+        let current = app.recordPermission();
+        if current == AVAudioApplicationRecordPermission::Granted {
+            return true;
+        }
+        if current == AVAudioApplicationRecordPermission::Denied {
+            return false;
+        }
+        // Undetermined — 弹系统权限框并等待用户选择（异步回调）
+        let (tx, rx) = mpsc::channel();
+        let block = DynBlock::new(move |granted: Bool| {
+            let _ = tx.send(granted);
+        });
+        AVAudioApplication::requestRecordPermissionWithCompletionHandler(&block);
+        match rx.recv_timeout(std::time::Duration::from_secs(120)) {
+            Ok(granted) => granted.as_bool(),
+            Err(_) => false,
+        }
     }
 }
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
