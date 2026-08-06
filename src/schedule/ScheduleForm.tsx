@@ -32,26 +32,26 @@ export default function ScheduleForm({ editingMeeting, initialDate, onSubmit, on
             <label htmlFor={`${uid}-title`} className="block text-xs font-medium text-gray-500 mb-1">会议标题</label>
             <input id={`${uid}-title`} type="text" placeholder="会议标题" value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-accent-300" />
+              className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300" />
           </div>
           <div>
             <label htmlFor={`${uid}-zoom`} className="block text-xs font-medium text-gray-500 mb-1">会议链接</label>
             <input id={`${uid}-zoom`} type="url" placeholder="会议链接 (可选)" value={zoomUrl}
               onChange={(e) => setZoomUrl(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-accent-300" />
+              className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300" />
           </div>
           <div className="flex gap-3">
             <div className="flex-1">
               <label htmlFor={`${uid}-date`} className="block text-xs font-medium text-gray-500 mb-1">日期</label>
               <input id={`${uid}-date`} type="date" value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-accent-300" />
+                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300" />
             </div>
             <div className="flex-1">
               <label htmlFor={`${uid}-time`} className="block text-xs font-medium text-gray-500 mb-1">时间</label>
               <input id={`${uid}-time`} type="time" value={time}
                 onChange={(e) => setTime(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-accent-300" />
+                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300" />
             </div>
           </div>
         </div>
@@ -61,7 +61,7 @@ export default function ScheduleForm({ editingMeeting, initialDate, onSubmit, on
             取消
           </button>
           <button onClick={handleSubmit} disabled={!canSubmit}
-            className="flex-1 px-4 py-2.5 bg-accent-600 text-white text-sm font-medium rounded-xl hover:bg-accent-700 disabled:opacity-40 transition-colors">
+            className="flex-1 px-4 py-2.5 bg-brand-600 text-white text-sm font-medium rounded-xl hover:bg-brand-700 disabled:opacity-40 transition-colors">
             {editingMeeting ? "保存" : "添加"}
           </button>
         </div>

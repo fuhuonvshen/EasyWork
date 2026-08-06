@@ -70,15 +70,15 @@ export default function MeetingModelCheck({ children }: { children: React.ReactN
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
-            <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-100">
+            <svg className="h-5 w-5 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
           </div>
           <div>
             <h2 className="text-base font-semibold text-gray-900">准备录制环境</h2>
-            <p className="text-xs text-gray-500">正在下载所需模型文件</p>
+            <p className="text-xs text-gray-500 pointer-events-none">正在下载所需模型文件</p>
           </div>
         </div>
 
@@ -92,7 +92,7 @@ export default function MeetingModelCheck({ children }: { children: React.ReactN
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
             <div
-              className="h-full rounded-full bg-blue-500 transition-all duration-500 ease-out"
+              className="h-full rounded-full bg-brand-500 transition-all duration-500 ease-out"
               style={{ width: status.vadReady ? "100%" : `${Math.max(status.vadProgress, 3)}%` }}
             />
           </div>
@@ -108,7 +108,7 @@ export default function MeetingModelCheck({ children }: { children: React.ReactN
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
             <div
-              className="h-full rounded-full bg-blue-500 transition-all duration-500 ease-out"
+              className="h-full rounded-full bg-brand-500 transition-all duration-500 ease-out"
               style={{ width: status.diarizationReady ? "100%" : `${Math.max(status.diarizationProgress, 3)}%` }}
             />
           </div>
@@ -125,7 +125,7 @@ export default function MeetingModelCheck({ children }: { children: React.ReactN
             </div>
           ) : (
             <div className="flex items-center gap-2 text-sm text-gray-400">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-400 border-t-transparent" />
               下载中…
             </div>
           )}

@@ -51,7 +51,7 @@ export default function Workbench({ onEnter }: { onEnter: (title?: string, actio
   }, []);
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="h-full flex flex-col">
       {/* Main content */}
       <div className="flex-1 flex items-center justify-center">
         <div className="grid grid-cols-2 gap-6 max-w-2xl mx-auto px-4">
@@ -103,11 +103,11 @@ export default function Workbench({ onEnter }: { onEnter: (title?: string, actio
 
       {/* Bottom bar */}
       <div className="flex items-center justify-between px-8 py-3 flex-shrink-0">
-        <span className="text-xs text-gray-300 select-none">EasyWork v{appVersion}</span>
+        <span className="text-xs text-gray-400 select-none">EasyWork v{appVersion}</span>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowModel(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-500 rounded-lg transition-colors"
           >
             <Settings size={14} />
             设置

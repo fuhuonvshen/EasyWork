@@ -22,9 +22,9 @@ export default function ScheduleView({
 
   return (
     <>
-      <header className="px-8 py-6 border-b border-gray-100 bg-white flex items-center justify-between">
+      <header className="px-8 py-4 bg-white flex items-center justify-between">
         <div>
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">日历视图 · 会议日程 · 工作报告</p>
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider pointer-events-none">日历视图 · 会议日程 · 工作报告</p>
           <h2 className="text-2xl font-semibold text-gray-900 mt-1">日程管理</h2>
         </div>
         <div className="flex items-center gap-3">
@@ -49,7 +49,7 @@ export default function ScheduleView({
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl transition-all ${
               isPastDate
                 ? "bg-gray-100 text-gray-300 cursor-not-allowed"
-                : "bg-accent-600 text-white hover:bg-accent-700 active:scale-95"
+                : "bg-brand-600 text-white hover:bg-brand-700 active:scale-95"
             }`}
           >
             <Plus size={16} />

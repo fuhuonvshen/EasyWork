@@ -38,7 +38,25 @@ export default function TodayView({
   const [liveTranscripts, setLiveTranscripts] = useState<{ speaker: string; text: string }[]>([]);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [meetingType, setMeetingType] = useState("其他");
+  const [elapsed, setElapsed] = useState(0);
   const dragStartXRef = useRef(0);
+
+  // 录制计时
+  useEffect(() => {
+    if (!recording) return;
+    setElapsed(0);
+    const t = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [recording]);
+
+  const formatElapsed = (total: number) => {
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    const mm = String(m).padStart(2, "0");
+    const ss = String(s).padStart(2, "0");
+    return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+  };
 
   const handleDragStart = (clientX: number) => {
     dragStartXRef.current = clientX;
@@ -233,13 +251,16 @@ export default function TodayView({
   if (recording || generating) {
     return (
       <div className="h-full flex flex-col">
-        <header className="px-6 py-3 border-b border-gray-100 bg-white flex items-center justify-between flex-shrink-0">
+        <header className="px-6 py-3 bg-white flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-400 animate-pulse" />
+            <span className="relative flex w-2.5 h-2.5">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 animate-ping opacity-75" />
+              <span className="relative inline-flex w-2.5 h-2.5 rounded-full bg-red-500" />
+            </span>
             <div>
               <h2 className="text-sm font-semibold text-gray-900">{meetingLabel || "会议录音中"}</h2>
-              <p className="text-[11px] text-gray-400">
-                {generating ? "正在生成纪要..." : `${liveTranscripts.length} 条转写`}
+              <p className="text-[11px] text-gray-400 pointer-events-none">
+                {generating ? "正在生成纪要..." : `${formatElapsed(elapsed)} · ${liveTranscripts.length} 条转写`}
               </p>
             </div>
           </div>
@@ -252,7 +273,7 @@ export default function TodayView({
             </button>
           )}
           {generating && (
-            <div className="flex items-center gap-2 text-sm text-accent-600">
+            <div className="flex items-center gap-2 text-sm text-brand-600">
               <Loader size={16} className="animate-spin" />
               生成纪要中...
             </div>
@@ -270,15 +291,15 @@ export default function TodayView({
           {generating && liveTranscripts.length === 0 && (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
-                <Loader size={32} className="animate-spin text-accent-400 mx-auto mb-4" />
-                <p className="text-sm text-gray-500">AI 正在分析会议内容...</p>
+                <Loader size={32} className="animate-spin text-brand-400 mx-auto mb-4" />
+                <p className="text-sm text-gray-500 pointer-events-none">AI 正在分析会议内容...</p>
               </div>
             </div>
           )}
 
           {liveTranscripts.length === 0 && recording && (
             <div className="flex items-center justify-center h-full">
-              <p className="text-sm text-gray-400">正在聆听...</p>
+              <p className="text-sm text-gray-400 pointer-events-none">正在聆听...</p>
             </div>
           )}
 
@@ -288,8 +309,8 @@ export default function TodayView({
                 <span
                   className={`flex-shrink-0 text-xs px-2 py-1 rounded font-medium h-fit ${
                     item.speaker === "我"
-                      ? "bg-blue-100 text-blue-700"
-                      : "bg-accent-100 text-accent-700"
+                      ? "bg-brand-100 text-brand-700"
+                      : "bg-brand-100 text-brand-700"
                   }`}
                 >
                   {item.speaker}
@@ -317,17 +338,18 @@ export default function TodayView({
   // ── Setup mode: configuration before recording ──
   return (
     <>
-      <header className="px-8 py-6 border-b border-gray-100 bg-white">
-        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">
-          {new Date().toLocaleDateString("zh-CN", {
-            year: "numeric", month: "long", day: "numeric", weekday: "long",
-          })}
-        </p>
-        <h2 className="text-2xl font-semibold text-gray-900 mt-1">今日会议</h2>
-      </header>
-
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="w-full max-w-md space-y-6">
+      <div className="relative h-full flex flex-col">
+        {/* 标题：悬浮在顶部不占文档流，主体才能在整个区域真正居中 */}
+        <header className="absolute top-0 left-0 right-0 px-8 pt-4 z-10 pointer-events-none">
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+            {new Date().toLocaleDateString("zh-CN", {
+              year: "numeric", month: "long", day: "numeric", weekday: "long",
+            })}
+          </p>
+          <h2 className="text-2xl font-semibold text-gray-900 mt-1">今日会议</h2>
+        </header>
+        <div className="flex-1 flex items-center justify-center px-8 py-8">
+          <div className="w-full max-w-md space-y-6">
           {error && (
             <div className="p-3 rounded-lg bg-red-50 border border-red-100 text-sm text-red-700">
               {error}
@@ -341,7 +363,7 @@ export default function TodayView({
               <select
                 value={selectedDevice}
                 onChange={(e) => setSelectedDevice(e.target.value)}
-                className="w-full appearance-none px-3 py-2.5 pr-8 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400"
+                className="w-full appearance-none px-3 py-2.5 pr-8 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400"
               >
                 {devices.length === 0 && <option value="">正在加载设备...</option>}
                 {devices.map((d) => (
@@ -359,7 +381,7 @@ export default function TodayView({
               value={meetingLabel}
               onChange={(e) => setMeetingLabel(e.target.value)}
               placeholder="例如：周例会"
-              className="w-full px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400"
+              className="w-full px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400 focus:bg-white"
             />
           </div>
 
@@ -369,7 +391,7 @@ export default function TodayView({
               <select
                 value={meetingType}
                 onChange={(e) => setMeetingType(e.target.value)}
-                className="w-full appearance-none px-3 py-2.5 pr-8 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400"
+                className="w-full appearance-none px-3 py-2.5 pr-8 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400"
               >
                 <option value="其他">通用</option>
                 <option value="周会">周会</option>
@@ -384,13 +406,13 @@ export default function TodayView({
           <button
             onClick={startRecording}
             disabled={!selectedDevice}
-            className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-accent-600 text-white text-sm font-medium rounded-full hover:bg-accent-700 active:scale-95 transition-all shadow-sm shadow-accent-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-brand-600 text-white text-sm font-medium rounded-full hover:bg-brand-700 active:scale-95 transition-all shadow-lg shadow-brand-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Mic size={16} />开始录制
           </button>
 
           <div className="relative">
-            <div className="absolute inset-0 flex items-center">
+            <div className="absolute inset-x-10 inset-y-0 flex items-center">
               <div className="w-full border-t border-gray-200" />
             </div>
             <div className="relative flex justify-center text-xs">
@@ -401,10 +423,11 @@ export default function TodayView({
           <button
             onClick={importAudio}
             disabled={generating}
-            className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-gray-600 text-sm font-medium rounded-full border-2 border-dashed border-gray-300 hover:border-accent-400 hover:text-accent-600 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-gray-600 text-sm font-medium rounded-full border-2 border-dashed border-gray-300 hover:border-brand-400 hover:text-brand-600 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <FileAudio size={16} />导入已有音频
           </button>
+          </div>
         </div>
       </div>
 
@@ -414,7 +437,7 @@ export default function TodayView({
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] mx-4 flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <div className="flex items-center gap-2">
-                <Sparkles size={18} className="text-accent-500" />
+                <Sparkles size={18} className="text-brand-500" />
                 <h2 className="text-lg font-semibold text-gray-900">{meetingLabel || "会议纪要"}</h2>
               </div>
               <button
@@ -444,7 +467,7 @@ export default function TodayView({
                 {/* Page 2: Transcript with speaker labels */}
                 <div className="min-w-full h-full overflow-y-auto px-6 py-4">
                   {liveTranscripts.length === 0 ? (
-                    <p className="text-sm text-gray-400">无转写记录</p>
+                    <p className="text-sm text-gray-400 pointer-events-none">无转写记录</p>
                   ) : (
                     <div className="space-y-3">
                       {liveTranscripts.map((item, i) => {
@@ -472,13 +495,13 @@ export default function TodayView({
               <button
                 onClick={() => setCarouselPage(0)}
                 className={`h-2 rounded-full transition-all duration-300 ${
-                  carouselPage === 0 ? "w-6 bg-blue-500" : "w-2 bg-gray-300 hover:bg-gray-400"
+                  carouselPage === 0 ? "w-6 bg-brand-500" : "w-2 bg-gray-300 hover:bg-gray-400"
                 }`}
               />
               <button
                 onClick={() => setCarouselPage(1)}
                 className={`h-2 rounded-full transition-all duration-300 ${
-                  carouselPage === 1 ? "w-6 bg-blue-500" : "w-2 bg-gray-300 hover:bg-gray-400"
+                  carouselPage === 1 ? "w-6 bg-brand-500" : "w-2 bg-gray-300 hover:bg-gray-400"
                 }`}
               />
               <span className="ml-2 text-xs text-gray-400">

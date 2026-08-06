@@ -157,7 +157,7 @@ export default function AgentApp({ onBack, initStatus }: { onBack: () => void; i
   if (llmLoading && llmStatus === "loading") {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-3 px-8">
-        <div className="w-8 h-8 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
         <p className="text-sm text-gray-500">正在加载本地模型…</p>
         <p className="text-xs text-gray-400">首次加载需要 5-15 秒</p>
       </div>
@@ -169,13 +169,13 @@ export default function AgentApp({ onBack, initStatus }: { onBack: () => void; i
   if (!loading && !activeId && conversations.length === 0 && loadError && !initStatus) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4 px-8">
-        <div className="w-full max-w-md rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
-          <p className="text-sm font-medium text-amber-800 mb-1">Agent 正在启动...</p>
-          <p className="text-xs text-amber-600 mt-1">首次启动需要几秒钟，请稍候</p>
+        <div className="w-full max-w-md rounded-xl border border-emerald-200 bg-emerald-50 p-6 text-center">
+          <p className="text-sm font-medium text-emerald-800 mb-1">Agent 正在启动...</p>
+          <p className="text-xs text-emerald-600 mt-1">首次启动需要几秒钟，请稍候</p>
         </div>
         <button
           onClick={() => { setLoading(true); loadConversations(); }}
-          className="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-xl hover:bg-amber-700 transition-colors"
+          className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-colors"
         >
           重试
         </button>
@@ -192,7 +192,7 @@ export default function AgentApp({ onBack, initStatus }: { onBack: () => void; i
   if (!activeId && conversations.length === 0 && agentSubView === "chat") {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4">
-        <p className="text-sm text-gray-400">还没有对话</p>
+        <p className="text-sm text-gray-400">暂无对话</p>
         <button
           onClick={handleNew}
           className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-colors"
@@ -210,7 +210,7 @@ export default function AgentApp({ onBack, initStatus }: { onBack: () => void; i
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full gap-2.5">
       <AgentSidebar
         conversations={conversations}
         activeId={activeId}
@@ -225,7 +225,7 @@ export default function AgentApp({ onBack, initStatus }: { onBack: () => void; i
         onTodoToggle={handleTodoToggle}
         onTodoDelete={handleTodoDelete}
       />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 rounded-lg bg-white overflow-hidden">
         {agentSubView === "chat" && activeId ? (
           <AgentChat conversationId={activeId} onConversationUpdate={handleConversationUpdate} />
         ) : agentSubView === "chat" ? (

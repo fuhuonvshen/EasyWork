@@ -59,7 +59,7 @@ export default function ConfirmDialog({
         {description && <p className="text-sm text-gray-500 whitespace-pre-line mb-6">{description}</p>}
         <div className="flex gap-3 justify-center">
           <button autoFocus onClick={onCancel} className="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors">{cancelLabel}</button>
-          <button onClick={onConfirm} className={`px-5 py-2.5 text-sm font-medium text-white rounded-xl hover:opacity-90 transition-colors ${confirmVariant === "danger" ? "bg-red-500" : "bg-accent-600"}`}>{confirmLabel}</button>
+          <button onClick={onConfirm} className={`px-5 py-2.5 text-sm font-medium text-white rounded-xl hover:opacity-90 transition-colors ${confirmVariant === "danger" ? "bg-red-500" : "bg-brand-600"}`}>{confirmLabel}</button>
         </div>
       </div>
     </div>

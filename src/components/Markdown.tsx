@@ -10,7 +10,7 @@ interface Props {
 export default function Markdown({ content }: Props) {
   // Pre-process special syntax before markdown parsing
   const processed = content
-    .replace(/(【)(.+?)(】)/g, '<span class="text-accent-600 font-medium">$1$2$3</span>')
+    .replace(/(【)(.+?)(】)/g, '<span class="text-brand-600 font-medium">$1$2$3</span>')
     .replace(/\[待确认\]/g, '<span class="text-amber-600 font-medium">[待确认]</span>');
 
   return (
@@ -35,7 +35,7 @@ export default function Markdown({ content }: Props) {
         pre: ({ children }) => <pre className="text-sm bg-gray-100 rounded p-3 my-2 overflow-x-auto">{children}</pre>,
         code: ({ children }) => <code className="text-xs bg-gray-100 px-1 rounded">{children}</code>,
         strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-        a: ({ href, children }) => <a href={href} className="text-accent-600 underline hover:no-underline" target="_blank" rel="noopener noreferrer">{children}</a>,
+        a: ({ href, children }) => <a href={href} className="text-brand-600 underline hover:no-underline" target="_blank" rel="noopener noreferrer">{children}</a>,
       }}
     >
       {processed}

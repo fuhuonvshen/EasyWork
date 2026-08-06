@@ -51,7 +51,7 @@ export default function MinutesApp({
 
   return (
     <MeetingModelCheck>
-    <div className="flex h-full">
+    <div className="flex h-full gap-2.5">
       <MinutesSidebar
         tab={tab}
         onTabChange={(key) => { setTab(key); setSelectedId(null); }}
@@ -61,7 +61,7 @@ export default function MinutesApp({
         onBack={onBack}
       />
 
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden rounded-lg bg-white">
         {tab === "today" && (
           <TodayView
             prefillTitle={prefillTitle}
@@ -82,9 +82,9 @@ export default function MinutesApp({
         )}
         {tab === "history" && !selectedId && historySubTab !== "meetings" && (
           <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-            <div className="px-8 py-6 border-b border-gray-100 bg-white">
-              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">工作报告</p>
-              <h2 className="text-2xl font-semibold text-gray-900 mt-1">
+            <div className="px-8 py-4 bg-white">
+              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider pointer-events-none">工作报告</p>
+              <h2 className="text-2xl font-semibold text-gray-900 mt-1 flex items-center min-h-[38px]">
                 {historySubTab === "week" ? "周报" : "月报"}
               </h2>
             </div>

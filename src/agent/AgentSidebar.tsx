@@ -27,8 +27,8 @@ export default function AgentSidebar({
   const [editTitle, setEditTitle] = useState("");
 
   return (
-    <aside className="w-56 bg-white border-r border-gray-100 flex flex-col flex-shrink-0">
-      <div className="px-4 py-5 border-b border-gray-50">
+    <aside className="w-56 bg-white rounded-lg overflow-hidden flex flex-col flex-shrink-0">
+      <div className="px-4 py-4">
         <button
           onClick={onBack}
           className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 transition-colors mb-2"
@@ -36,7 +36,7 @@ export default function AgentSidebar({
           <ArrowLeft size={14} />
           返回工作台
         </button>
-        <h1 className="text-lg font-bold tracking-tight text-gray-900">办公助手</h1>
+        <h1 className="text-xl font-bold text-gray-900">办公助手</h1>
         <p className="text-xs text-gray-400 mt-0.5">智能问答 · 生产报告 · 待办管理</p>
 
         {/* View tabs */}

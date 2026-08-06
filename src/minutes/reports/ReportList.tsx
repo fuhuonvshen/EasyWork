@@ -22,14 +22,14 @@ export default function ReportList({
           <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
             <Sparkles size={26} className="text-gray-300" />
           </div>
-          <p className="text-sm text-gray-400">暂无{periodType === "week" ? "周报" : "月报"}</p>
+          <p className="text-sm text-gray-400 pointer-events-none">暂无{periodType === "week" ? "周报" : "月报"}</p>
         </div>
       )}
       <div className="space-y-2">
         {filtered.map((r) => (
           <div
             key={r.id}
-            className="flex items-center gap-4 px-5 py-4 rounded-xl bg-white border border-gray-100 shadow-sm hover:shadow-md hover:border-accent-200 transition-all group"
+            className="flex items-center gap-4 px-5 py-4 rounded-xl bg-white border border-gray-100 shadow-sm hover:shadow-md hover:border-brand-200 transition-all group"
           >
             <button
               onClick={() => onView(r.content)}

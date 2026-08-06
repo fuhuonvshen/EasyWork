@@ -14,8 +14,8 @@ export default function ReportModal({ report, loading, onClose }: Props) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
         <div className="bg-white rounded-2xl shadow-xl p-8 mx-4 text-center">
-          <Loader size={32} className="animate-spin text-accent-400 mx-auto mb-4" />
-          <p className="text-sm text-gray-600">AI 正在生成报告...</p>
+          <Loader size={32} className="animate-spin text-brand-400 mx-auto mb-4" />
+          <p className="text-sm text-gray-600 pointer-events-none">AI 正在生成报告...</p>
         </div>
       </div>
     );
@@ -28,7 +28,7 @@ export default function ReportModal({ report, loading, onClose }: Props) {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] mx-4 flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
-            <Sparkles size={18} className="text-accent-500" />
+            <Sparkles size={18} className="text-brand-500" />
             <h2 className="text-lg font-semibold text-gray-900">工作报告</h2>
           </div>
           <div className="flex items-center gap-2">

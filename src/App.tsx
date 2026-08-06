@@ -8,6 +8,7 @@ import Workbench from "./workbench/Workbench";
 import MinutesApp from "./minutes";
 import AgentApp from "./agent/AgentApp";
 import ReminderModal from "./ReminderModal";
+import TitleBar from "./components/TitleBar";
 import { ToastContainer, showToast } from "./components/Toast";
 import UpdateDialog from "./components/UpdateDialog";
 import type { MinutesTab } from "./types";
@@ -153,7 +154,15 @@ export default function App() {
   }, []);
 
   return (
-    <div className="h-screen bg-gray-50">
+    <div className="h-screen relative overflow-hidden">
+      {/* 底层：浅灰蓝渐变 + 微光光斑（底图） */}
+      <div className="app-bg absolute inset-0" />
+      {/* 遮罩层：半透明白 + 背景模糊（玻璃质感） */}
+      <div className="absolute inset-0 bg-white/40 backdrop-blur-md" />
+      {/* 内容层 */}
+      <div className="relative h-full flex flex-col">
+      <TitleBar />
+      <div className={`flex-1 min-h-0 ${view === "workbench" ? "" : "p-2.5 pt-0"}`}>
       {view === "workbench" && (
         <Workbench
           onEnter={(title?: string, action?: string) => {
@@ -180,6 +189,8 @@ export default function App() {
       {view === "agent" && (
         <AgentApp onBack={() => setView("workbench")} initStatus={agentInitStatus} />
       )}
+      </div>
+      </div>
 
       {reminder && (
         <ReminderModal

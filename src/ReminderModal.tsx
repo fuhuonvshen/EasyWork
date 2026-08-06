@@ -12,8 +12,8 @@ export default function ReminderModal({ reminder, onGo, onClose }: ReminderModal
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in">
       <div className="bg-white rounded-2xl shadow-2xl p-8 mx-4 max-w-sm w-full text-center animate-in zoom-in">
-        <div className="w-16 h-16 rounded-full bg-accent-100 flex items-center justify-center mx-auto mb-4">
-          <Clock size={32} className="text-accent-600" />
+        <div className="w-16 h-16 rounded-full bg-brand-100 flex items-center justify-center mx-auto mb-4">
+          <Clock size={32} className="text-brand-600" />
         </div>
         <h2 className="text-xl font-bold text-gray-900 mb-2">会议提醒</h2>
         <p className="text-base text-gray-700 font-medium mb-1">{reminder.title}</p>
@@ -35,7 +35,7 @@ export default function ReminderModal({ reminder, onGo, onClose }: ReminderModal
               await invoke("dismiss_reminder");
               onGo(reminder);
             }}
-            className="px-6 py-2.5 text-sm font-medium text-white bg-accent-600 rounded-xl hover:bg-accent-700 transition-colors"
+            className="px-6 py-2.5 text-sm font-medium text-white bg-brand-600 rounded-xl hover:bg-brand-700 transition-colors"
           >
             前往
           </button>

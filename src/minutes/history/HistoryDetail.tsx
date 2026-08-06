@@ -90,7 +90,7 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
 
   return (
     <>
-      <header className="px-8 py-6 border-b border-gray-100 bg-white flex items-center justify-between">
+      <header className="px-8 py-4 bg-white flex items-center justify-between">
         <div className="flex items-center gap-4 min-w-0">
           <button onClick={onBack} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0">
             <ArrowLeft size={18} />
@@ -102,7 +102,7 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
                   type="text"
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  className="text-xl font-semibold text-gray-900 bg-gray-50 border border-gray-300 rounded-lg px-3 py-1 outline-none focus:ring-2 focus:ring-accent-300 w-full max-w-md"
+                  className="text-xl font-semibold text-gray-900 bg-gray-50 border border-gray-300 rounded-lg px-3 py-1 outline-none focus:ring-2 focus:ring-brand-300 w-full max-w-md"
                   autoFocus
                   onKeyDown={(e) => { if (e.key === "Enter") handleSaveTitle(); if (e.key === "Escape") { setEditingTitle(false); setEditTitle(detail?.title || ""); } }}
                 />
@@ -137,14 +137,14 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
             <ExportDropdown content={detail.content} />
             <button
               onClick={loadTranscript}
-              className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1.5"
+              className="px-4 py-2 text-sm font-medium text-brand-600 bg-brand-50 rounded-lg hover:bg-brand-100 transition-colors flex items-center gap-1.5"
             >
               <MessageSquareText size={16} />
               查看转写
             </button>
             <button
               onClick={() => setEditing(true)}
-              className="px-4 py-2 text-sm font-medium text-accent-600 bg-accent-50 rounded-lg hover:bg-accent-100 transition-colors"
+              className="px-4 py-2 text-sm font-medium text-brand-600 bg-brand-50 rounded-lg hover:bg-brand-100 transition-colors"
             >
               编辑纪要
             </button>
@@ -161,7 +161,7 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-4 py-2 text-sm font-medium text-white bg-accent-600 rounded-lg hover:bg-accent-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors"
             >
               {saving ? "保存中..." : "保存"}
             </button>
@@ -194,7 +194,7 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
           <textarea
             value={editContent}
             onChange={(e) => setEditContent(e.target.value)}
-            className="w-full h-full min-h-[400px] text-sm text-gray-700 leading-relaxed resize-none border border-gray-200 rounded-lg p-4 outline-none focus:ring-2 focus:ring-accent-300 font-sans"
+            className="w-full h-full min-h-[400px] text-sm text-gray-700 leading-relaxed resize-none border border-gray-200 rounded-lg p-4 outline-none focus:ring-2 focus:ring-brand-300 font-sans"
           />
         )}
       </div>
@@ -205,7 +205,7 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] mx-4 flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <div className="flex items-center gap-2">
-                <MessageSquareText size={18} className="text-blue-500" />
+                <MessageSquareText size={18} className="text-brand-500" />
                 <h2 className="text-lg font-semibold text-gray-900">转写记录</h2>
               </div>
               <button
@@ -222,7 +222,7 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
                   加载中...
                 </div>
               ) : transcriptChunks.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-8">该会议没有说话人转写记录</p>
+                <p className="text-sm text-gray-400 text-center py-8 pointer-events-none">该会议没有说话人转写记录</p>
               ) : (
                 <div className="space-y-3">
                   {transcriptChunks.map((item, i) => {

@@ -33,7 +33,7 @@ export default function DayDetailPanel({
             <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center mx-auto mb-3">
               <Clock size={20} className="text-gray-300" />
             </div>
-            <p className="text-sm text-gray-400">当天无日程</p>
+            <p className="text-sm text-gray-400 pointer-events-none">当天无日程</p>
           </div>
         )}
         {meetings.map((m) => (
@@ -49,11 +49,11 @@ export default function DayDetailPanel({
               title="点击查看历史纪要"
               aria-label={`查看 ${m.title} 的纪要`}
             >
-              <div className="flex-shrink-0 px-2.5 py-1 rounded-lg bg-accent-50 text-accent-700 text-xs font-semibold text-center leading-tight">
+              <div className="flex-shrink-0 px-2.5 py-1 rounded-lg bg-brand-50 text-brand-700 text-xs font-semibold text-center leading-tight">
                 {m.start_time.slice(11, 16)}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 leading-snug group-hover:text-accent-600 transition-colors">{m.title}</p>
+                <p className="text-sm font-medium text-gray-900 leading-snug group-hover:text-brand-600 transition-colors">{m.title}</p>
               </div>
             </button>
             <div className="flex items-center justify-end gap-1.5 mt-3 pt-3 border-t border-gray-50">
@@ -61,7 +61,7 @@ export default function DayDetailPanel({
                 <button
                   onClick={() => { invoke("launch_meeting_link", { url: m.zoom_url }); onNavigateRecording(m.title, m.id); }}
                   aria-label={`加入 ${m.title}`}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 active:scale-95 transition-all"
+                  className="flex items-center gap-1 px-3 py-1.5 bg-brand-500 text-white text-xs font-medium rounded-lg hover:bg-brand-700 active:scale-95 transition-all"
                 >
                   <Video size={12} /> 入会
                 </button>

@@ -94,42 +94,42 @@ export default function MeetingListView({
   return (
     <div className="flex-1 flex flex-col overflow-hidden min-w-0">
       {/* Header */}
-      <div className="px-8 py-6 border-b border-gray-100 bg-white min-w-0">
-        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">搜索与浏览</p>
+      <div className="px-8 py-4 bg-white min-w-0">
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider pointer-events-none">搜索与浏览</p>
         <div className="flex items-center gap-3 mt-1">
           <h2 className="text-2xl font-semibold text-gray-900 flex-shrink-0">会议记录</h2>
           <button onClick={() => { setIsManageMode((v) => !v); setSelectedIds(new Set()); }}
-            className={`ml-2 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors flex-shrink-0 ${isManageMode ? "bg-accent-100 text-accent-700" : "text-gray-500 hover:bg-gray-100"}`}>
+            className={`ml-2 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors flex-shrink-0 ${isManageMode ? "bg-brand-100 text-brand-700" : "text-gray-500 hover:bg-gray-100"}`}>
             管理
           </button>
           <div className="flex-1 relative min-w-0">
             <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} aria-label="搜索会议"
               placeholder="搜索标题或内容..."
-              className="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 focus:bg-white transition-colors" />
+              className="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400 focus:bg-white transition-colors" />
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             {searchQuery && <button onClick={() => setSearchQuery("")} aria-label="清除搜索" className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-400 hover:text-gray-600"><X size={14} /></button>}
           </div>
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} aria-label="开始日期"
-            className="px-2.5 py-2 rounded-lg border border-gray-200 text-xs text-gray-600 bg-gray-50 focus:outline-none focus:ring-1 focus:ring-accent-300 w-32" />
+            className="px-2.5 py-2 rounded-lg border border-gray-200 text-xs text-gray-600 bg-gray-50 focus:outline-none focus:ring-1 focus:ring-brand-300 w-32" />
           <span className="text-xs text-gray-400 flex-shrink-0">至</span>
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} aria-label="结束日期"
-            className="px-2.5 py-2 rounded-lg border border-gray-200 text-xs text-gray-600 bg-gray-50 focus:outline-none focus:ring-1 focus:ring-accent-300 w-32" />
+            className="px-2.5 py-2 rounded-lg border border-gray-200 text-xs text-gray-600 bg-gray-50 focus:outline-none focus:ring-1 focus:ring-brand-300 w-32" />
           {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(""); setDateTo(""); }} className="text-xs text-gray-400 hover:text-gray-600 flex-shrink-0">清除</button>}
         </div>
       </div>
 
       {/* Manage bar */}
       {isManageMode && (
-        <div className="flex items-center gap-3 px-8 py-2 border-b border-gray-100 bg-gray-50/50">
+        <div className="flex items-center gap-3 px-8 py-2 bg-gray-50/50">
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input type="checkbox" ref={selectAllRef} checked={isAllSelected} onChange={handleSelectAll}
-              className="w-4 h-4 rounded border-gray-300 text-accent-600 focus:ring-accent-500" />
+              className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
             <span className="text-xs font-medium text-gray-500">全选</span>
           </label>
           {selectedIds.size > 0 && (
             <>
               <span className="text-xs text-gray-300">|</span>
-              <span className="text-xs font-medium text-accent-600">已选择 {selectedIds.size} 项</span>
+              <span className="text-xs font-medium text-brand-600 pointer-events-none">已选择 {selectedIds.size} 项</span>
               <button onClick={() => setShowBatchDelete(true)} disabled={isBusy}
                 className="ml-2 px-3 py-1 text-xs font-medium text-white bg-red-500 rounded-md hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                 <Trash2 size={12} className="inline mr-1" />删除 {selectedIds.size}
@@ -156,15 +156,15 @@ export default function MeetingListView({
             <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
               <FileText size={26} className="text-gray-300" />
             </div>
-            <p className="text-sm text-gray-400">{searchQuery ? "未找到匹配的会议" : "还没有会议记录"}</p>
+            <p className="text-sm text-gray-400 pointer-events-none">{searchQuery ? "未找到匹配的会议" : "暂无会议记录"}</p>
           </div>
         )}
         <div className="space-y-2" role="list">
           {meetings.map((m) => (
-            <div key={m.id} role="listitem" className={`flex items-center gap-4 px-5 py-4 rounded-xl bg-white border border-gray-100 shadow-sm transition-all ${isManageMode ? "" : "hover:shadow-md hover:border-accent-200 group"}`}>
+            <div key={m.id} role="listitem" className={`flex items-center gap-4 px-5 py-4 rounded-xl bg-white border border-gray-100 shadow-sm transition-all ${isManageMode ? "" : "hover:shadow-md hover:border-brand-200 group"}`}>
               {isManageMode && (
                 <input type="checkbox" checked={selectedIds.has(m.id)} onChange={() => handleToggleSelect(m.id)} onClick={(e) => e.stopPropagation()}
-                  className="w-4 h-4 rounded border-gray-300 text-accent-600 focus:ring-accent-500 flex-shrink-0" />
+                  className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500 flex-shrink-0" />
               )}
               <button onClick={() => isManageMode ? null : onSelectMeeting(m.id)} onKeyDown={(e) => e.key === "Enter" && !isManageMode && onSelectMeeting(m.id)} className="flex-1 text-left min-w-0" disabled={isManageMode}>
                 <div className="flex items-center gap-2">
@@ -202,12 +202,12 @@ export default function MeetingListView({
               .filter((p) => { if (totalPages <= 7) return true; if (p === 1 || p === totalPages) return true; return Math.abs(p - page) <= 1; })
               .reduce<(number | "...")[]>((acc, p, idx, arr) => { if (idx > 0) { const prev = arr[idx - 1]; if (p - prev > 1) acc.push("..."); } acc.push(p); return acc; }, [])
               .map((item, i) => item === "..." ? <span key={`dots-${i}`} className="px-2 text-gray-400 text-sm">...</span>
-                : <button key={item} onClick={() => setPage(item)} aria-current={item === page ? "page" : undefined} className={`w-9 h-9 text-sm font-medium rounded-lg transition-colors ${item === page ? "bg-accent-600 text-white" : "text-gray-600 bg-white border border-gray-200 hover:bg-gray-50"}`}>{item}</button>)}
+                : <button key={item} onClick={() => setPage(item)} aria-current={item === page ? "page" : undefined} className={`w-9 h-9 text-sm font-medium rounded-lg transition-colors ${item === page ? "bg-brand-600 text-white" : "text-gray-600 bg-white border border-gray-200 hover:bg-gray-50"}`}>{item}</button>)}
             <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} aria-label="下一页"
               className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">下一页</button>
             <span className="text-xs text-gray-400 ml-3">共 {totalMeetings} 条</span>
             <select value={pageSize} onChange={(e) => setPageSize(parseInt(e.target.value))} aria-label="每页条数"
-              className="ml-2 px-2 py-1 text-xs border border-gray-200 rounded-md bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-accent-300">
+              className="ml-2 px-2 py-1 text-xs border border-gray-200 rounded-md bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-brand-300">
               {PAGE_SIZE_OPTIONS.map((s) => (
                 <option key={s} value={s}>{s} 条/页</option>
               ))}
