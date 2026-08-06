@@ -1,6 +1,6 @@
 // EasyWork - Workbench (landing page)
 import { useState, useEffect } from "react";
-import { FileText, Video, Bot, LayoutGrid, Settings } from "lucide-react";
+import { FileText, Video, Bot, MessageSquareHeart, Settings } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 import ModelDownloadDialog from "../settings/ModelDownloadDialog";
 
@@ -33,13 +33,13 @@ const WORKBENCH_CARDS = [
     action: "agent" as const,
   },
   {
-    key: "whiteboard",
-    icon: LayoutGrid,
-    title: "白板协作",
-    desc: "团队协作白板",
+    key: "feedback",
+    icon: MessageSquareHeart,
+    title: "意见反馈",
+    desc: "变得更强",
     color: "bg-amber-50 text-amber-600",
     hoverColor: "hover:bg-amber-100 hover:border-amber-200",
-    placeholder: true,
+    action: "feedback" as const,
   },
 ] as const;
 

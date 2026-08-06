@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import Workbench from "./workbench/Workbench";
+import FeedbackView from "./workbench/FeedbackView";
 import MinutesApp from "./minutes";
 import AgentApp from "./agent/AgentApp";
 import ReminderModal from "./ReminderModal";
@@ -17,7 +18,7 @@ const MINUTES_TABS: MinutesTab[] = ["today", "history", "schedule", "reports"];
 const isMinutesTab = (v: string): v is MinutesTab => MINUTES_TABS.includes(v as MinutesTab);
 
 export default function App() {
-  const [view, setView] = useState<"workbench" | "minutes" | "agent">("workbench");
+  const [view, setView] = useState<"workbench" | "minutes" | "agent" | "feedback">("workbench");
   const [prefillTitle, setPrefillTitle] = useState("");
   const [initialTab, setInitialTab] = useState<MinutesTab>("today");
 
@@ -201,6 +202,8 @@ export default function App() {
           onEnter={(title?: string, action?: string) => {
             if (action === "agent") {
               setView("agent");
+            } else if (action === "feedback") {
+              setView("feedback");
             } else {
               setPrefillTitle(title || "");
               setCurrentScheduleId(null);
@@ -221,6 +224,9 @@ export default function App() {
       )}
       {view === "agent" && (
         <AgentApp onBack={() => setView("workbench")} initStatus={agentInitStatus} />
+      )}
+      {view === "feedback" && (
+        <FeedbackView onBack={() => setView("workbench")} />
       )}
       </div>
       </div>

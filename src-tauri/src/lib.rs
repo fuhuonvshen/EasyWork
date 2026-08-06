@@ -14,6 +14,7 @@ mod settings;
 mod summary;
 mod whisper;
 mod update;
+mod feedback;
 
 mod state;
 
@@ -236,6 +237,7 @@ pub fn run() {
             update::install_update,
             update::update_check,
             update::update_download,
+            feedback::send_feedback,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
