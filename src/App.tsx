@@ -52,6 +52,7 @@ export default function App() {
   const [updateInfo, setUpdateInfo] = useState<{
     version: string;
     body: string;
+    downloadUrl?: string;
     downloadAndInstall: () => Promise<void>;
   } | null>(null);
   const [updateProgress, setUpdateProgress] = useState(0);
@@ -59,30 +60,62 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const { check } = await import("@tauri-apps/plugin-updater");
-        const update = await check();
-        if (update?.available) {
-          setUpdateInfo({
-            version: update.version,
-            body: update.body || "",
-            downloadAndInstall: () => update.downloadAndInstall(),
-          });
+        const isWindows = navigator.userAgent.includes("Windows");
+        if (isWindows) {
+          // Windows：自研更新流程（插件 downloadAndInstall 同步等待 msiexec，
+          // 应用活着时 sidecar 锁文件 → 安装必失败），见 update.rs
+          const info = await invoke<{ version: string; notes: string; url: string } | null>("update_check");
+          if (info) {
+            setUpdateInfo({
+              version: info.version,
+              body: info.notes,
+              downloadUrl: info.url,
+              downloadAndInstall: async () => {},
+            });
+          }
+        } else {
+          const { check } = await import("@tauri-apps/plugin-updater");
+          const update = await check();
+          if (update?.available) {
+            setUpdateInfo({
+              version: update.version,
+              body: update.body || "",
+              downloadAndInstall: () => update.downloadAndInstall(),
+            });
+          }
         }
       } catch {}
     })();
   }, []);
 
+  // Download progress events (Windows self-implemented flow)
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      unlisten = await listen<number>("update-progress", (e) => {
+        setUpdateProgress(e.payload);
+      });
+    })();
+    return () => { unlisten?.(); };
+  }, []);
+
   const handleUpdateInstall = async () => {
     if (!updateInfo) return;
-    // Show indeterminate progress while downloading (no progress API in this plugin version)
     setUpdateProgress(1);
     try {
-      await updateInfo.downloadAndInstall();
-      setUpdateProgress(100);
-      // 不要 relaunch：新进程会锁住安装文件导致 MSI 安装失败（Error 1310）。
-      // exit_for_update 会先清理 easywork-agent/llama-server 子进程再正常退出，
-      // 让 msiexec 完成安装；安装完成后请手动重新打开应用。
-      await invoke("exit_for_update");
+      if (updateInfo.downloadUrl) {
+        // Windows：下载 → Rust 清理 sidecar → 异步启动 msiexec → 退出应用
+        const installerPath = await invoke<string>("update_download", { url: updateInfo.downloadUrl });
+        setUpdateProgress(100);
+        await invoke("install_update", { installerPath });
+      } else {
+        await updateInfo.downloadAndInstall();
+        setUpdateProgress(100);
+        // 不要 relaunch：新进程会锁住安装文件导致 MSI 安装失败（Error 1310）。
+        // exit_for_update 会先清理 easywork-agent/llama-server 子进程再正常退出，
+        // 让 msiexec 完成安装；安装完成后请手动重新打开应用。
+        await invoke("exit_for_update");
+      }
     } catch (e) {
       setUpdateProgress(0);
       console.error("更新失败", e);

@@ -1,8 +1,9 @@
 // EasyWork - Today View (recording + transcript + minutes)
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Mic, MicOff, ChevronDown, Loader, Sparkles, X, FileAudio } from "lucide-react";
+import { Mic, MicOff, Loader, Sparkles, X, FileAudio } from "lucide-react";
 import Markdown from "../../components/Markdown";
+import Select from "../../components/Select";
 import { ERRORS, toUserError } from "../../errors";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import type { AudioDevice } from "../../types";
@@ -359,19 +360,13 @@ export default function TodayView({
 
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1.5">音频输出设备</label>
-            <div className="relative">
-              <select
-                value={selectedDevice}
-                onChange={(e) => setSelectedDevice(e.target.value)}
-                className="w-full appearance-none px-3 py-2.5 pr-8 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400"
-              >
-                {devices.length === 0 && <option value="">正在加载设备...</option>}
-                {devices.map((d) => (
-                  <option key={d.id} value={d.name}>{d.name}{d.is_default ? " (默认)" : ""}</option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            </div>
+            <Select
+              value={selectedDevice}
+              options={devices.map((d) => ({ value: d.name, label: `${d.name}${d.is_default ? " (默认)" : ""}` }))}
+              onChange={setSelectedDevice}
+              placeholder="正在加载设备..."
+              disabled={devices.length === 0}
+            />
           </div>
 
           <div>
@@ -387,20 +382,17 @@ export default function TodayView({
 
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1.5">会议类型</label>
-            <div className="relative">
-              <select
-                value={meetingType}
-                onChange={(e) => setMeetingType(e.target.value)}
-                className="w-full appearance-none px-3 py-2.5 pr-8 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400"
-              >
-                <option value="其他">通用</option>
-                <option value="周会">周会</option>
-                <option value="培训">培训</option>
-                <option value="项目评审">项目评审</option>
-                <option value="面试">面试</option>
-              </select>
-              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            </div>
+            <Select
+              value={meetingType}
+              options={[
+                { value: "其他", label: "通用" },
+                { value: "周会", label: "周会" },
+                { value: "培训", label: "培训" },
+                { value: "项目评审", label: "项目评审" },
+                { value: "面试", label: "面试" },
+              ]}
+              onChange={setMeetingType}
+            />
           </div>
 
           <button

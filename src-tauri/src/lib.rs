@@ -233,6 +233,9 @@ pub fn run() {
             settings::commands::pick_audio_file,
             // ── Update ──
             update::exit_for_update,
+            update::install_update,
+            update::update_check,
+            update::update_download,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

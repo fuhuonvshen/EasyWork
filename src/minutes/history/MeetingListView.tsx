@@ -1,7 +1,7 @@
 // EasyWork - Meeting list view (search, filter, paginate, manage, delete)
 import { useState, useEffect, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { FileText, ChevronRight, Search, X, Pin, Trash2, Loader2 } from "lucide-react";
+import { FileText, ChevronRight, Search, X, Pin, Trash2, Loader2, CalendarDays } from "lucide-react";
 import type { MeetingRow } from "../../types";
 import { ERRORS, toUserError } from "../../errors";
 import ConfirmDialog from "../../components/ConfirmDialog";
@@ -9,6 +9,40 @@ import { showToast } from "../../components/Toast";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 const DEFAULT_PAGE_SIZE = PAGE_SIZE_OPTIONS[0];
+
+// 日期字段：按钮点击调用原生 showPicker() 弹系统日历，
+// 显示层自定义（未选时提示文字，有值时统一 YYYY-MM-DD 格式）
+function DateField({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div className="relative w-32">
+      <input
+        ref={inputRef}
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={label}
+        className="sr-only"
+      />
+      <button
+        type="button"
+        onClick={() => {
+          const el = inputRef.current;
+          if (!el) return;
+          try {
+            el.showPicker();
+          } catch {
+            el.click();
+          }
+        }}
+        className="w-full flex items-center gap-1.5 px-2.5 py-2 rounded-lg border border-gray-200 text-xs bg-gray-50 hover:bg-gray-100 transition-colors"
+      >
+        {value ? <span className="text-gray-600">{value}</span> : <span className="text-gray-400">{label}</span>}
+        <CalendarDays size={13} className="ml-auto text-gray-400 flex-shrink-0" />
+      </button>
+    </div>
+  );
+}
 
 export default function MeetingListView({
   onSelectMeeting,
@@ -109,11 +143,9 @@ export default function MeetingListView({
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             {searchQuery && <button onClick={() => setSearchQuery("")} aria-label="清除搜索" className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-400 hover:text-gray-600"><X size={14} /></button>}
           </div>
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} aria-label="开始日期"
-            className="px-2.5 py-2 rounded-lg border border-gray-200 text-xs text-gray-600 bg-gray-50 focus:outline-none focus:ring-1 focus:ring-brand-300 w-32" />
+          <DateField value={dateFrom} onChange={setDateFrom} label="开始日期" />
           <span className="text-xs text-gray-400 flex-shrink-0">至</span>
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} aria-label="结束日期"
-            className="px-2.5 py-2 rounded-lg border border-gray-200 text-xs text-gray-600 bg-gray-50 focus:outline-none focus:ring-1 focus:ring-brand-300 w-32" />
+          <DateField value={dateTo} onChange={setDateTo} label="结束日期" />
           {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(""); setDateTo(""); }} className="text-xs text-gray-400 hover:text-gray-600 flex-shrink-0">清除</button>}
         </div>
       </div>
