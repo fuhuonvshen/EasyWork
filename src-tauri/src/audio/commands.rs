@@ -2,6 +2,7 @@
 
 use tauri::{AppHandle, Emitter, Manager, State};
 use crate::audio::capture::{AudioCapture, CaptureConfig};
+use crate::audio::denoise::Denoiser;
 use crate::audio::device::{list_output_devices, AudioDevice};
 use crate::diarization::DiarizationEngine;
 use crate::state::{
@@ -156,6 +157,9 @@ pub async fn start_capture(
                 ..Default::default()
             };
 
+            let mut denoiser = crate::audio::denoise::RnnoiseDenoiser::new();
+            log::info!("[{}] RNNoise denoiser ready", default_speaker);
+
             let vad = match sherpa_onnx::VoiceActivityDetector::create(&vad_config, 30.0) {
                 Some(v) => v,
                 None => {
@@ -170,8 +174,14 @@ pub async fn start_capture(
             loop {
                 match tokio::time::timeout(std::time::Duration::from_millis(300), rx.recv()).await {
                     Ok(Some(chunk)) => {
+                        // 降噪管线：下混 → 48kHz → RNNoise → 16kHz → VAD
+                        let mono = crate::audio::denoise::downmix(&chunk, channels);
+                        let mut d48 = crate::audio::denoise::linear_resample(
+                            &mono, sample_rate, crate::audio::denoise::DENOISE_RATE,
+                        );
+                        denoiser.process(&mut d48);
                         let audio = crate::whisper::engine::convert_audio_for_whisper(
-                            &chunk, channels, sample_rate,
+                            &d48, 1, crate::audio::denoise::DENOISE_RATE,
                         );
                         vad.accept_waveform(&audio);
                         was_speaking = true;

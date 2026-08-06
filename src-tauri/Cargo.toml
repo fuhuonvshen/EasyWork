@@ -26,6 +26,9 @@ cpal = "0.17"
 anyhow = "1"
 ringbuf = "0.4"
 hound = "3.5"
+
+# Real-time noise suppression (RNNoise pure-Rust port)
+nnnoiseless = { version = "0.5.2", default-features = false }
 tokio = { version = "1", features = ["full"] }
 log = "0.4"
 env_logger = "0.11"
