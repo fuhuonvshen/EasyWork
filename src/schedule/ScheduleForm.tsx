@@ -35,8 +35,8 @@ export default function ScheduleForm({ editingMeeting, initialDate, onSubmit, on
               className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-accent-300" />
           </div>
           <div>
-            <label htmlFor={`${uid}-zoom`} className="block text-xs font-medium text-gray-500 mb-1">Zoom 链接</label>
-            <input id={`${uid}-zoom`} type="url" placeholder="Zoom 链接 (可选)" value={zoomUrl}
+            <label htmlFor={`${uid}-zoom`} className="block text-xs font-medium text-gray-500 mb-1">会议链接</label>
+            <input id={`${uid}-zoom`} type="url" placeholder="会议链接 (可选)" value={zoomUrl}
               onChange={(e) => setZoomUrl(e.target.value)}
               className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-accent-300" />
           </div>

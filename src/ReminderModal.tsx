@@ -30,7 +30,7 @@ export default function ReminderModal({ reminder, onGo, onClose }: ReminderModal
           <button
             onClick={async () => {
               if (reminder.zoomUrl) {
-                await invoke("launch_zoom", { url: reminder.zoomUrl });
+                await invoke("launch_meeting_link", { url: reminder.zoomUrl });
               }
               await invoke("dismiss_reminder");
               onGo(reminder);

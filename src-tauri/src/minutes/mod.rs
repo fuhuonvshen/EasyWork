@@ -1,8 +1,8 @@
 pub mod meeting;
+pub mod meeting_link;
 pub mod reminder;
 pub mod report;
 pub mod schedule;
-pub mod zoom;
 
 use sqlx::sqlite::SqlitePool;
 use std::collections::HashSet;

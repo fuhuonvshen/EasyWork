@@ -59,7 +59,7 @@ export default function DayDetailPanel({
             <div className="flex items-center justify-end gap-1.5 mt-3 pt-3 border-t border-gray-50">
               {m.zoom_url && (
                 <button
-                  onClick={() => { invoke("launch_zoom", { url: m.zoom_url }); onNavigateRecording(m.title, m.id); }}
+                  onClick={() => { invoke("launch_meeting_link", { url: m.zoom_url }); onNavigateRecording(m.title, m.id); }}
                   aria-label={`加入 ${m.title}`}
                   className="flex items-center gap-1 px-3 py-1.5 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 active:scale-95 transition-all"
                 >

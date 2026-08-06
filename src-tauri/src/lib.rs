@@ -195,7 +195,7 @@ pub fn run() {
             minutes::schedule::update_scheduled_meeting,
             minutes::schedule::list_scheduled_meetings,
             minutes::schedule::find_meeting_by_schedule,
-            minutes::zoom::launch_zoom,
+            minutes::meeting_link::launch_meeting_link,
             minutes::report::generate_report,
             minutes::report::list_reports,
             minutes::report::delete_report,
