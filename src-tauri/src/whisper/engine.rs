@@ -469,8 +469,8 @@ impl WhisperEngine {
             let t0 = segment.start_timestamp();
             let t1 = segment.end_timestamp();
             segments.push(SegmentInfo {
-                start: t0 as f64 / 1e7,
-                end: t1 as f64 / 1e7,
+                start: (t0 as f64 / 1e7) as f32,
+                end: (t1 as f64 / 1e7) as f32,
                 text: trimmed.to_string(),
             });
         }
