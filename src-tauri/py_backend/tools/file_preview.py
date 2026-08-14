@@ -5,16 +5,21 @@ import os
 _MAX_PREVIEW_CHARS = 30_000
 
 
-def _preview_dataframe(df, label: str) -> str:
+def _preview_dataframe(df, label: str, total_rows: int | None = None) -> str:
     """Format dataframe preview, truncating columns if too wide or long.
 
     Shows first 15 + last 5 columns when > 20 cols, and caps total output.
+    `total_rows` is the real row count of the source file (may differ from
+    `len(df)` when the preview only read the first N rows).
     """
     _MAX_COL_SHOW = 20
     _COL_SPLIT = 15  # show first 15, then last (20-15)=5
 
     ncols = len(df.columns)
-    info = f"{label}: {len(df)} 行, {ncols} 列\n"
+    if total_rows is not None and total_rows > len(df):
+        info = f"{label}: 共 {total_rows} 行, {ncols} 列（预览仅显示前 {len(df)} 行）\n"
+    else:
+        info = f"{label}: 预览 {len(df)} 行, {ncols} 列\n"
 
     if ncols > _MAX_COL_SHOW:
         front = list(df.columns[:_COL_SPLIT])
@@ -41,9 +46,26 @@ def read_excel_preview(file_path: str) -> str:
         df = pd.read_excel(file_path, nrows=20)
         if df.empty:
             return "[空文件]"
-        return _preview_dataframe(df, file_path)
+        return _preview_dataframe(df, file_path, _excel_total_rows(file_path))
     except Exception as e:
         return f"读取 Excel 文件失败: {e}"
+
+
+def _excel_total_rows(file_path: str) -> int | None:
+    """Fast real row count of the first sheet (openpyxl max_row, no data read).
+    Returns None for legacy .xls or on failure — preview falls back gracefully.
+    """
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(file_path, read_only=True)
+        try:
+            ws = wb[wb.sheetnames[0]]
+            n = ws.max_row
+        finally:
+            wb.close()
+        return n
+    except Exception:
+        return None
 
 
 def read_csv_preview(file_path: str, filename: str = "") -> str:
