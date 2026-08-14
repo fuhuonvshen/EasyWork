@@ -466,8 +466,8 @@ impl WhisperEngine {
             }
 
             // whisper.cpp timestamps are 100ns ticks: seconds = t / 1e7
-            let t0 = state.full_get_segment_t0(i);
-            let t1 = state.full_get_segment_t1(i);
+            let t0 = segment.start_timestamp();
+            let t1 = segment.end_timestamp();
             segments.push(SegmentInfo {
                 start: t0 as f64 / 1e7,
                 end: t1 as f64 / 1e7,
