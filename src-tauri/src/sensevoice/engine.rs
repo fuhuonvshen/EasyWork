@@ -12,6 +12,8 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::RwLock;
 
+use crate::whisper::engine::SegmentInfo;
+
 // ── Chunking constants for long audio ──────────────────────────
 // SenseVoice's OfflineRecognizer allocates O(n²) memory for self-attention.
 // Chunking prevents OOM on long recordings while keeping GPU acceleration.
@@ -350,6 +352,69 @@ impl SenseVoiceEngine {
         let merged = Self::merge_texts(&results);
         log::info!("SenseVoice: chunking done — {} chunks → {} chars", results.len(), merged.len());
         Ok(merged)
+    }
+
+    /// Transcribe audio and return per-chunk timestamps. SenseVoice has no
+    /// model-level segment timestamps, so we approximate: each 30s chunk's
+    /// text gets the chunk's audio window as its time range.
+    pub async fn transcribe_segments(&self, audio: &[f32]) -> Result<Vec<SegmentInfo>> {
+        let recognizer = {
+            let guard = self.recognizer.read().await;
+            guard
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("SenseVoice 模型未加载"))?
+                .clone()
+        };
+
+        if audio.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Short audio: single segment over the whole clip.
+        if audio.len() <= SV_SHORT_AUDIO_THRESH {
+            let text = Self::transcribe_chunk(&recognizer, audio)?;
+            if text.is_empty() {
+                return Ok(Vec::new());
+            }
+            let secs = audio.len() as f32 / 16000.0;
+            return Ok(vec![SegmentInfo { start: 0.0, end: secs, text }]);
+        }
+
+        let mut segments: Vec<SegmentInfo> = Vec::new();
+        let mut pos = 0;
+
+        while pos < audio.len() {
+            let end = std::cmp::min(pos + SV_CHUNK_SAMPLES, audio.len());
+
+            // Merge a very short tail into the current chunk.
+            let chunk_end = if audio.len() - end < SV_MIN_TAIL_SAMPLES && end < audio.len() {
+                audio.len()
+            } else {
+                end
+            };
+
+            let chunk = &audio[pos..chunk_end];
+            match Self::transcribe_chunk(&recognizer, chunk) {
+                Ok(text) if !text.is_empty() => {
+                    segments.push(SegmentInfo {
+                        start: pos as f32 / 16000.0,
+                        end: chunk_end as f32 / 16000.0,
+                        text,
+                    });
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    log::warn!("SenseVoice: chunk [{}, {}) failed: {}", pos, chunk_end, e);
+                }
+            }
+
+            if chunk_end == audio.len() {
+                break;
+            }
+            pos += SV_HOP_SAMPLES;
+        }
+
+        Ok(segments)
     }
 
     /// Transcribe a single audio chunk (no chunking logic).

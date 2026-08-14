@@ -62,6 +62,11 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
         .execute(pool)
         .await
         .ok();
+    // Migration: add segments column (JSON array of {start, end, text} for click-to-seek)
+    sqlx::query("ALTER TABLE transcripts ADD COLUMN segments TEXT")
+        .execute(pool)
+        .await
+        .ok();
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS minutes (
@@ -451,14 +456,15 @@ pub async fn update_setting(pool: &SqlitePool, key: &str, value: &str) -> Result
 
 pub async fn insert_transcript(pool: &SqlitePool, t: &Transcript) -> Result<()> {
     sqlx::query(
-        "INSERT INTO transcripts (id, meeting_id, content, created_at, live_transcript)
-         VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO transcripts (id, meeting_id, content, created_at, live_transcript, segments)
+         VALUES (?, ?, ?, ?, ?, ?)",
     )
     .bind(&t.id)
     .bind(&t.meeting_id)
     .bind(&t.content)
     .bind(&t.created_at)
     .bind(&t.live_transcript)
+    .bind(&t.segments)
     .execute(pool)
     .await
     .context("插入 transcript 失败")?;
@@ -515,8 +521,8 @@ pub async fn update_minutes(pool: &SqlitePool, meeting_id: &str, content: &str) 
 }
 
 pub async fn get_meeting_detail(pool: &SqlitePool, meeting_id: &str) -> Result<Option<super::models::MeetingDetail>> {
-    let row: Option<(String, String, Option<String>)> = sqlx::query_as(
-        "SELECT m.title, m.id, min.content FROM meetings m \
+    let row: Option<(String, String, Option<String>, String)> = sqlx::query_as(
+        "SELECT m.title, m.id, min.content, m.wav_path FROM meetings m \
          LEFT JOIN minutes min ON min.meeting_id = m.id \
          WHERE m.id = ?"
     )
@@ -524,10 +530,11 @@ pub async fn get_meeting_detail(pool: &SqlitePool, meeting_id: &str) -> Result<O
     .fetch_optional(pool)
     .await
     .context("查询会议失败")?;
-    Ok(row.map(|(title, id, content)| super::models::MeetingDetail {
+    Ok(row.map(|(title, id, content, wav_path)| super::models::MeetingDetail {
         id,
         title,
         content: content.unwrap_or_default(),
+        wav_path,
     }))
 }
 

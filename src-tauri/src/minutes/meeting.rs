@@ -41,24 +41,28 @@ pub async fn generate_minutes(
     // Prefer SenseVoice for final transcription; fallback to Whisper on any failure.
     // SenseVoice (ONNX) has O(n²) memory on long audio, so we fall back to Whisper
     // which processes audio in chunks and handles long recordings gracefully.
-    let wav_transcript = if let Some(ref sv) = sv_engine {
+    // Both return segments with timestamps for click-to-seek audio playback.
+    let (wav_transcript, segments) = if let Some(ref sv) = sv_engine {
         let sv_result = match sv.ensure_model_loaded().await {
             Ok(()) => {
-                sv.transcribe(&audio).await.map_err(|e| format!("SenseVoice 转写失败: {}", e))
+                sv.transcribe_segments(&audio).await.map_err(|e| format!("SenseVoice 转写失败: {}", e))
             }
             Err(e) => Err(format!("SenseVoice 模型加载失败: {}", e)),
         };
         match sv_result {
-            Ok(text) if !text.trim().is_empty() => {
+            Ok(segs) if !segs.is_empty() => {
                 log::info!("generate_minutes: using SenseVoice for final transcription");
-                text
+                let text = segs.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join("\n");
+                (text, segs)
             }
             Ok(_) | Err(_) => {
                 log::warn!("SenseVoice failed with empty/error result, falling back to Whisper");
                 if let Some(ref w) = whisper_engine {
                     w.ensure_model_loaded().await.map_err(|err| format!("Whisper 模型加载失败: {}", err))?;
                     log::info!("generate_minutes: using Whisper for final transcription");
-                    w.transcribe(&audio).await.map_err(|err| format!("Whisper 转写失败: {}", err))?
+                    let segs = w.transcribe_segments(&audio).await.map_err(|err| format!("Whisper 转写失败: {}", err))?;
+                    let text = segs.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join("\n");
+                    (text, segs)
                 } else {
                     return Err(
                         "没有可用的语音识别模型。请在「模型管理」中下载 SenseVoice 或 ggml-small 模型。".into(),
@@ -69,13 +73,21 @@ pub async fn generate_minutes(
     } else if let Some(ref w) = whisper_engine {
         w.ensure_model_loaded().await.map_err(|e| format!("Whisper 模型加载失败: {}", e))?;
         log::info!("generate_minutes: using Whisper for final transcription");
-        w.transcribe(&audio)
+        let segs = w.transcribe_segments(&audio)
             .await
-            .map_err(|e| format!("Whisper 转写失败: {}", e))?
+            .map_err(|e| format!("Whisper 转写失败: {}", e))?;
+        let text = segs.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join("\n");
+        (text, segs)
     } else {
         return Err(
             "没有可用的语音识别模型。请在「模型管理」中下载 SenseVoice 或 ggml-small 模型。".into(),
         );
+    };
+
+    let segments_json = if segments.is_empty() {
+        None
+    } else {
+        serde_json::to_string(&segments).ok()
     };
 
     let mut full_transcript = wav_transcript;
@@ -128,6 +140,7 @@ pub async fn generate_minutes(
             live_transcript: live_transcript_json.map(|s| {
                 if s.trim().is_empty() || s == "[]" { None } else { Some(s) }
             }).flatten(),
+            segments: segments_json,
         },
     )
     .await
@@ -271,8 +284,13 @@ pub async fn get_meeting_transcript(
         .and_then(|s| serde_json::from_str::<Vec<serde_json::Value>>(&s).ok())
         .unwrap_or_default();
 
+    let segments: Vec<serde_json::Value> = transcript.segments
+        .and_then(|s| serde_json::from_str::<Vec<serde_json::Value>>(&s).ok())
+        .unwrap_or_default();
+
     Ok(serde_json::json!({
         "chunks": chunks,
+        "segments": segments,
         "rawContent": transcript.content,
     }))
 }

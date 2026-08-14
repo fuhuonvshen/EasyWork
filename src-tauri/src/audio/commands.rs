@@ -170,6 +170,9 @@ pub async fn start_capture(
             log::info!("[{}] Silero VAD ready", default_speaker);
 
             let mut was_speaking = false;
+            // Cumulative 16kHz samples accepted so far — used to derive each
+            // VAD segment's start time for click-to-seek playback.
+            let mut pos_16k: usize = 0;
 
             loop {
                 match tokio::time::timeout(std::time::Duration::from_millis(300), rx.recv()).await {
@@ -184,6 +187,7 @@ pub async fn start_capture(
                             &d48, 1, crate::audio::denoise::DENOISE_RATE,
                         );
                         vad.accept_waveform(&audio);
+                        pos_16k += audio.len();
                         was_speaking = true;
                     }
                     Ok(None) => {
@@ -194,6 +198,7 @@ pub async fn start_capture(
                         if was_speaking {
                             let silence = vec![0.0f32; 1600]; // 100ms of silence
                             vad.accept_waveform(&silence);
+                            pos_16k += 1600;
                             was_speaking = vad.detected();
                         }
                     }
@@ -203,6 +208,9 @@ pub async fn start_capture(
                 while let Some(segment) = vad.front() {
                     let samples = segment.samples().to_vec();
                     let dur = samples.len() as f32 / 16000.0;
+                    // Approximate segment start: current position minus the
+                    // segment's own samples (VAD buffers the tail silence).
+                    let start_secs = (pos_16k.saturating_sub(samples.len())) as f32 / 16000.0;
                     vad.pop();
                     if dur < 0.5 { continue; }
 
@@ -223,6 +231,7 @@ pub async fn start_capture(
                     let buf = buf_clone.clone();
                     let spk = speaker_label.clone();
                     let use_sv = prefer_sv;
+                    let seg_start = start_secs;
                     tauri::async_runtime::spawn(async move {
                         let mut r = if use_sv && sv.is_some() {
                             sv.as_ref().unwrap().transcribe(&samples).await
@@ -236,7 +245,7 @@ pub async fn start_capture(
                         if let Ok(t) = r {
                             if !t.trim().is_empty() {
                                 log::info!("[{}] {:.1}s '{}'", spk, dur, t.trim());
-                                let c = serde_json::json!({"speaker": spk, "text": t.trim()});
+                                let c = serde_json::json!({"speaker": spk, "text": t.trim(), "start": seg_start});
                                 let _ = app.emit("transcript-chunk", &c);
                                 if let Ok(mut g) = buf.lock() { g.push(c); }
                             }
@@ -253,6 +262,7 @@ pub async fn start_capture(
             while let Some(segment) = vad.front() {
                 let samples = segment.samples().to_vec();
                 let dur = samples.len() as f32 / 16000.0;
+                let start_secs = (pos_16k.saturating_sub(samples.len())) as f32 / 16000.0;
                 vad.pop();
                 if dur < 0.5 { continue; }
 
@@ -268,6 +278,7 @@ pub async fn start_capture(
                 let buf = buf_clone.clone();
                 let spk = speaker_label.clone();
                 let use_sv = prefer_sv;
+                let seg_start = start_secs;
                 tauri::async_runtime::spawn(async move {
                     let mut r = if use_sv && sv.is_some() {
                         sv.as_ref().unwrap().transcribe(&samples).await
@@ -281,7 +292,7 @@ pub async fn start_capture(
                     if let Ok(t) = r {
                         if !t.trim().is_empty() {
                             log::info!("[{}] {:.1}s '{}'", spk, dur, t.trim());
-                            let c = serde_json::json!({"speaker": spk, "text": t.trim()});
+                            let c = serde_json::json!({"speaker": spk, "text": t.trim(), "start": seg_start});
                             let _ = app.emit("transcript-chunk", &c);
                             if let Ok(mut g) = buf.lock() { g.push(c); }
                         }
@@ -356,4 +367,50 @@ pub fn check_meeting_models(app: AppHandle) -> Result<serde_json::Value, String>
         "diarizationReady": diarization_ready,
         "bothReady": vad_ready && diarization_ready,
     }))
+}
+
+/// Convert a float32 WAV (recording format) to a 16-bit PCM WAV for browser
+/// playback — WebKit/Safari cannot decode float32 WAV. Idempotent: skips if
+/// the `*_playback.wav` sibling already exists. Returns the playback path.
+#[tauri::command]
+pub async fn prepare_playback_audio(wav_path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let src = std::path::Path::new(&wav_path);
+        if !src.exists() {
+            return Err("音频文件不存在".to_string());
+        }
+        let stem = src
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("audio");
+        let dest = src.with_file_name(format!("{}_playback.wav", stem));
+        if dest.exists() {
+            return Ok(dest.to_string_lossy().to_string());
+        }
+
+        let mut reader = hound::WavReader::open(src)
+            .map_err(|e| format!("无法读取音频: {}", e))?;
+        let spec = reader.spec();
+        let samples: Vec<f32> = reader.samples::<f32>().filter_map(|s| s.ok()).collect();
+
+        let out_spec = hound::WavSpec {
+            channels: spec.channels,
+            sample_rate: spec.sample_rate,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut writer = hound::WavWriter::create(&dest, out_spec)
+            .map_err(|e| format!("无法创建播放音频: {}", e))?;
+        for s in samples {
+            let clamped = s.clamp(-1.0, 1.0);
+            writer
+                .write_sample((clamped * 32767.0) as i16)
+                .map_err(|e| format!("写入音频失败: {}", e))?;
+        }
+        writer.finalize().map_err(|e| format!("保存音频失败: {}", e))?;
+
+        Ok(dest.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|e| format!("音频转换任务失败: {}", e))?
 }

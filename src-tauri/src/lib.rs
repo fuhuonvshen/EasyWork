@@ -158,6 +158,7 @@ pub fn run() {
             audio::commands::stop_capture,
             audio::commands::get_transcript_chunks,
             audio::commands::check_meeting_models,
+            audio::commands::prepare_playback_audio,
             // ── Whisper ──
             whisper::commands::whisper_check_model,
             whisper::commands::whisper_list_models,

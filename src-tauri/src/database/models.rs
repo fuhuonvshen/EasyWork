@@ -24,7 +24,8 @@ pub struct Transcript {
     pub meeting_id: String,
     pub content: String,
     pub created_at: String,
-    pub live_transcript: Option<String>,  // JSON array of {speaker, text} chunks
+    pub live_transcript: Option<String>,  // JSON array of {speaker, text, start} chunks
+    pub segments: Option<String>,         // JSON array of {start, end, text} (final transcription)
 }
 
 /// Meeting minutes linked to a meeting.
@@ -117,10 +118,11 @@ pub struct TodoItem {
     pub schedule_id: Option<String>,  // links to scheduled_meetings.id
 }
 
-/// Meeting detail returned by get_meeting (title + minutes content).
+/// Meeting detail returned by get_meeting (title + minutes content + audio path).
 #[derive(Debug, Clone, Serialize)]
 pub struct MeetingDetail {
     pub id: String,
     pub title: String,
     pub content: String,
+    pub wav_path: String,
 }

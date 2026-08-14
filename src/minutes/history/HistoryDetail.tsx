@@ -1,7 +1,7 @@
 // EasyWork - History Detail (view/edit meeting minutes + title + transcript)
-import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { ArrowLeft, Loader, Pencil, Check, X, MessageSquareText } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { ArrowLeft, Loader, Pencil, Check, X, MessageSquareText, PlayCircle } from "lucide-react";
 import Markdown from "../../components/Markdown";
 import ExportDropdown from "../../components/ExportDropdown";
 import { ERRORS, toUserError } from "../../errors";
@@ -10,6 +10,25 @@ interface MeetingDetail {
   id: string;
   title: string;
   content: string;
+  wav_path?: string;
+}
+
+interface TranscriptChunk {
+  speaker: string;
+  text: string;
+  start?: number;
+}
+
+interface TranscriptSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+function formatTime(secs: number): string {
+  const s = Math.max(0, Math.floor(secs));
+  const m = Math.floor(s / 60);
+  return `${m}:${String(s % 60).padStart(2, "0")}`;
 }
 
 export default function HistoryDetail({ meetingId, onBack }: { meetingId: string; onBack: () => void }) {
@@ -38,18 +57,56 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
     if (isNaN(n)) return { bg: "#F3F4F6", text: "#4B5563" };
     return speakerColors[(n - 1) % speakerColors.length];
   };
-  const [transcriptChunks, setTranscriptChunks] = useState<{ speaker: string; text: string }[]>([]);
+  const [transcriptChunks, setTranscriptChunks] = useState<TranscriptChunk[]>([]);
   const [transcriptLoading, setTranscriptLoading] = useState(false);
+  const [audioSrc, setAudioSrc] = useState<string | null>(null);
+  const [currentIndex, setCurrentIndex] = useState<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     setLoading(true);
     setEditing(false);
     setEditingTitle(false);
     invoke<MeetingDetail>("get_meeting", { meetingId })
-      .then((d) => { setDetail(d); setEditContent(d.content); setEditTitle(d.title); })
+      .then((d) => {
+        setDetail(d);
+        setEditContent(d.content);
+        setEditTitle(d.title);
+        // Prepare a browser-playable (16-bit PCM) copy of the recording
+        if (d.wav_path) {
+          invoke<string>("prepare_playback_audio", { wavPath: d.wav_path })
+            .then((path) => setAudioSrc(convertFileSrc(path)))
+            .catch(() => setAudioSrc(null));
+        }
+      })
       .catch(() => setDetail({ id: meetingId, title: ERRORS.LOAD_MINUTES, content: "" }))
       .finally(() => setLoading(false));
   }, [meetingId]);
+
+  // Highlight the transcript line matching the current playback position
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const onTime = () => {
+      const t = audio.currentTime;
+      let idx = -1;
+      for (let i = 0; i < transcriptChunks.length; i++) {
+        const start = transcriptChunks[i].start;
+        if (start !== undefined && t >= start) idx = i;
+        else if (start !== undefined) break;
+      }
+      setCurrentIndex(idx);
+    };
+    audio.addEventListener("timeupdate", onTime);
+    return () => audio.removeEventListener("timeupdate", onTime);
+  }, [transcriptChunks, audioSrc]);
+
+  const seekTo = (start: number | undefined) => {
+    const audio = audioRef.current;
+    if (start === undefined || !audio) return;
+    audio.currentTime = start;
+    audio.play().catch(() => {});
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -68,8 +125,16 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
     setTranscriptLoading(true);
     setShowTranscript(true);
     try {
-      const res = await invoke<{ chunks: { speaker: string; text: string }[] }>("get_meeting_transcript", { meetingId });
-      setTranscriptChunks(res.chunks);
+      const res = await invoke<{ chunks: TranscriptChunk[]; segments: TranscriptSegment[] }>("get_meeting_transcript", { meetingId });
+      // Prefer live speaker chunks (they carry start times); fall back to
+      // final-transcription segments for older meetings without speaker data.
+      if (res.chunks.length > 0) {
+        setTranscriptChunks(res.chunks);
+      } else {
+        setTranscriptChunks(
+          res.segments.map((s) => ({ speaker: "", text: s.text, start: s.start }))
+        );
+      }
     } catch {
       setTranscriptChunks([]);
     }
@@ -215,6 +280,15 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
                 <X size={18} />
               </button>
             </div>
+            {audioSrc && (
+              <div className="px-6 pt-4 pb-1 border-b border-gray-50">
+                <audio ref={audioRef} src={audioSrc} controls className="w-full" />
+                <p className="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
+                  <PlayCircle size={12} />
+                  点击句子可跳转到对应音频位置
+                </p>
+              </div>
+            )}
             <div className="flex-1 overflow-y-auto px-6 py-4">
               {transcriptLoading ? (
                 <div className="flex items-center gap-2 text-sm text-gray-400 py-8 justify-center">
@@ -224,19 +298,33 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
               ) : transcriptChunks.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-8 pointer-events-none">该会议没有说话人转写记录</p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {transcriptChunks.map((item, i) => {
                     const s = getSpeakerStyle(item.speaker);
+                    const clickable = item.start !== undefined && !!audioSrc;
+                    const active = clickable && currentIndex === i;
                     return (
-                      <div key={i} className="flex gap-3 items-start">
-                        <span
-                          className="shrink-0 inline-flex items-center justify-center rounded-full text-xs font-medium h-6 min-w-[64px] px-3"
-                          style={{ backgroundColor: s.bg, color: s.text }}
-                        >
-                          {item.speaker}
+                      <button
+                        key={i}
+                        onClick={() => seekTo(item.start)}
+                        disabled={!clickable}
+                        className={`w-full text-left flex gap-3 items-start rounded-lg px-2 py-1.5 transition-colors ${
+                          active ? "bg-brand-50 ring-1 ring-brand-200" : clickable ? "hover:bg-gray-50 cursor-pointer" : "cursor-default"
+                        }`}
+                      >
+                        {item.speaker && (
+                          <span
+                            className="shrink-0 inline-flex items-center justify-center rounded-full text-xs font-medium h-6 min-w-[64px] px-3 mt-0.5"
+                            style={{ backgroundColor: s.bg, color: s.text }}
+                          >
+                            {item.speaker}
+                          </span>
+                        )}
+                        <span className="text-xs text-gray-400 font-mono mt-1 shrink-0 w-10 text-right">
+                          {clickable ? formatTime(item.start!) : ""}
                         </span>
                         <span className="text-sm text-gray-700 leading-6">{item.text}</span>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>

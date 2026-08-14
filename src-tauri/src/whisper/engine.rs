@@ -21,6 +21,14 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
+/// A transcribed segment with timestamps, used for click-to-seek playback.
+#[derive(Debug, Clone, Serialize)]
+pub struct SegmentInfo {
+    pub start: f32,
+    pub end: f32,
+    pub text: String,
+}
+
 /// Model metadata exposed to the frontend.
 #[derive(Debug, Clone, Serialize)]
 pub struct ModelInfo {
@@ -405,6 +413,69 @@ impl WhisperEngine {
 
     pub async fn is_loaded(&self) -> bool {
         self.context.read().await.is_some()
+    }
+
+    /// Transcribe audio and return per-segment timestamps (for click-to-seek
+    /// audio playback). Timestamps come from Whisper's own segments.
+    pub async fn transcribe_segments(&self, audio: &[f32]) -> Result<Vec<SegmentInfo>> {
+        let guard = self.context.read().await;
+        let ctx = guard
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("没有加载模型，请先加载 Whisper 模型"))?;
+
+        let mut state = ctx
+            .create_state()
+            .context("无法创建 Whisper 状态")?;
+
+        let mut params = FullParams::new(SamplingStrategy::BeamSearch {
+            beam_size: 5,
+            patience: 1.0,
+        });
+
+        // Timestamps must be enabled to get segment start/end times
+        params.set_no_timestamps(false);
+        params.set_print_special(false);
+        params.set_print_progress(false);
+        params.set_print_realtime(false);
+        params.set_print_timestamps(false);
+        params.set_language(Some("zh"));
+
+        let n_threads = std::thread::available_parallelism()
+            .map(|n| n.get() as i32)
+            .unwrap_or(4);
+        params.set_n_threads(n_threads);
+
+        state
+            .full(params, audio)
+            .context("语音转文字失败")?;
+
+        let num_segments = state.full_n_segments();
+        let mut segments = Vec::with_capacity(num_segments as usize);
+
+        for i in 0..num_segments {
+            let segment = state
+                .get_segment(i)
+                .ok_or_else(|| anyhow::anyhow!("无法获取第 {} 个转写片段", i))?;
+
+            let text = segment
+                .to_str_lossy()
+                .with_context(|| format!("无法读取第 {} 个转写文本", i))?;
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            // whisper.cpp timestamps are 100ns ticks: seconds = t / 1e7
+            let t0 = state.full_get_segment_t0(i);
+            let t1 = state.full_get_segment_t1(i);
+            segments.push(SegmentInfo {
+                start: t0 as f64 / 1e7,
+                end: t1 as f64 / 1e7,
+                text: trimmed.to_string(),
+            });
+        }
+
+        Ok(segments)
     }
 
     /// Ensure a model is loaded; auto-load the first downloaded model if none is loaded.
