@@ -96,9 +96,8 @@ pub async fn llm_download_binary(
     state: State<'_, LlmState>,
 ) -> Result<(), String> {
     let engine = state.0.read().await;
-    if engine.is_binary_ready() {
-        return Ok(());
-    }
+    // ensure_binary() 内部处理 ready 检查 + CUDA 自愈（驱动存在但 bin
+    // 缺少 CUDA 运行库时重下 CUDA 版），这里不能提前返回。
     engine.ensure_binary().await.map_err(|e| format!("下载 llama-server 失败: {}", e))?;
     drop(engine);
 

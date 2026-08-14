@@ -187,6 +187,7 @@ pub fn run() {
             minutes::meeting::list_meetings,
             minutes::meeting::delete_meeting,
             minutes::meeting::delete_meetings,
+            minutes::meeting::delete_meeting_audio,
             minutes::meeting::toggle_pin_meeting,
             minutes::meeting::get_meeting_minutes,
             minutes::meeting::get_meeting,

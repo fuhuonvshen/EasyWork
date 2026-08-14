@@ -380,7 +380,24 @@ pub async fn find_meeting_by_schedule_id(pool: &SqlitePool, schedule_id: &str) -
     Ok(row.map(|r| r.0))
 }
 
-pub async fn delete_meeting(pool: &SqlitePool, id: &str) -> Result<()> {
+/// Remove a meeting's audio files (recording + browser-playable copy) if present.
+/// Single-file deletes only — never touches directories.
+fn remove_meeting_audio_files(wav_path: &str) {
+    let wav = std::path::Path::new(wav_path);
+    let _ = std::fs::remove_file(wav);
+    if let Some(stem) = wav.file_stem().and_then(|s| s.to_str()) {
+        let playback = wav.with_file_name(format!("{}_playback.wav", stem));
+        let _ = std::fs::remove_file(&playback);
+    }
+}
+
+pub async fn delete_meeting(pool: &SqlitePool, id: &str, delete_audio: bool) -> Result<()> {
+    let wav: Option<(String,)> = sqlx::query_as("SELECT wav_path FROM meetings WHERE id = ?")
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .context("查询会议音频路径失败")?;
+
     // Delete child rows first
     sqlx::query("DELETE FROM transcripts WHERE meeting_id = ?")
         .bind(id)
@@ -395,13 +412,41 @@ pub async fn delete_meeting(pool: &SqlitePool, id: &str) -> Result<()> {
         .execute(pool)
         .await
         .context("删除 meeting 失败")?;
+
+    if delete_audio {
+        if let Some((w,)) = wav {
+            if !w.is_empty() {
+                remove_meeting_audio_files(&w);
+            }
+        }
+    }
     Ok(())
 }
 
-pub async fn delete_meetings(pool: &SqlitePool, ids: &[String]) -> Result<()> {
+pub async fn delete_meetings(pool: &SqlitePool, ids: &[String], delete_audio: bool) -> Result<()> {
     if ids.is_empty() {
         return Ok(());
     }
+    let wavs: Vec<String> = if delete_audio {
+        let mut paths = Vec::new();
+        for id in ids {
+            if let Some((w,)) = sqlx::query_as::<_, (String,)>(
+                "SELECT wav_path FROM meetings WHERE id = ?",
+            )
+            .bind(id)
+            .fetch_optional(pool)
+            .await?
+            {
+                if !w.is_empty() {
+                    paths.push(w);
+                }
+            }
+        }
+        paths
+    } else {
+        Vec::new()
+    };
+
     let mut tx = pool.begin().await.context("开始事务失败")?;
     for id in ids {
         sqlx::query("DELETE FROM transcripts WHERE meeting_id = ?")
@@ -421,7 +466,35 @@ pub async fn delete_meetings(pool: &SqlitePool, ids: &[String]) -> Result<()> {
             .context("批量删除 meeting 失败")?;
     }
     tx.commit().await.context("提交事务失败")?;
+
+    for w in &wavs {
+        remove_meeting_audio_files(w);
+    }
     Ok(())
+}
+
+/// Delete a meeting's audio files without deleting the meeting record.
+/// Returns whether any file was actually removed. Clears wav_path in DB.
+pub async fn delete_meeting_audio(pool: &SqlitePool, meeting_id: &str) -> Result<bool> {
+    let wav: Option<(String,)> = sqlx::query_as("SELECT wav_path FROM meetings WHERE id = ?")
+        .bind(meeting_id)
+        .fetch_optional(pool)
+        .await
+        .context("查询会议音频路径失败")?;
+
+    match wav {
+        Some((w,)) if !w.is_empty() => {
+            let existed = std::path::Path::new(&w).exists();
+            remove_meeting_audio_files(&w);
+            sqlx::query("UPDATE meetings SET wav_path = '' WHERE id = ?")
+                .bind(meeting_id)
+                .execute(pool)
+                .await
+                .context("清除会议音频路径失败")?;
+            Ok(existed)
+        }
+        _ => Ok(false),
+    }
 }
 
 // ── Settings ─────────────────────────────────────────────────

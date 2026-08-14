@@ -60,6 +60,8 @@ export default function MeetingListView({
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [deleteTarget, setDeleteTarget] = useState<MeetingRow | null>(null);
   const [showBatchDelete, setShowBatchDelete] = useState(false);
+  const [deleteAudio, setDeleteAudio] = useState(false);
+  const [batchDeleteAudio, setBatchDeleteAudio] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const refresh = () => setRefreshKey((k) => k + 1);
@@ -113,12 +115,18 @@ export default function MeetingListView({
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    try { await invoke("delete_meeting", { id: deleteTarget.id }); setDeleteTarget(null); setSelectedIds(new Set()); refresh(); }
+    try {
+      await invoke("delete_meeting", { id: deleteTarget.id, deleteAudio: deleteAudio });
+      setDeleteTarget(null); setSelectedIds(new Set()); setDeleteAudio(false); refresh();
+    }
     catch (e) { showToast(toUserError(ERRORS.DELETE_MEETING, e), "error"); }
   };
 
   const handleBatchDelete = async () => {
-    try { await invoke("delete_meetings", { ids: Array.from(selectedIds) }); setShowBatchDelete(false); setSelectedIds(new Set()); setIsManageMode(false); refresh(); }
+    try {
+      await invoke("delete_meetings", { ids: Array.from(selectedIds), deleteAudio: batchDeleteAudio });
+      setShowBatchDelete(false); setSelectedIds(new Set()); setIsManageMode(false); setBatchDeleteAudio(false); refresh();
+    }
     catch (e) { showToast(toUserError(ERRORS.DELETE_MEETING, e), "error"); }
   };
 
@@ -255,7 +263,13 @@ export default function MeetingListView({
         description={`确定要删除此会议吗？此操作不可撤销。\n"${deleteTarget?.title}"`}
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
-      />
+      >
+        <label className="flex items-center gap-2 cursor-pointer select-none text-left">
+          <input type="checkbox" checked={deleteAudio} onChange={(e) => setDeleteAudio(e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+          <span className="text-xs text-gray-500">同时删除录音文件（wav，无法恢复）</span>
+        </label>
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={showBatchDelete}
@@ -264,7 +278,13 @@ export default function MeetingListView({
         description={`确定要删除选中的 ${selectedIds.size} 个会议吗？此操作不可撤销。`}
         onConfirm={handleBatchDelete}
         onCancel={() => setShowBatchDelete(false)}
-      />
+      >
+        <label className="flex items-center gap-2 cursor-pointer select-none text-left">
+          <input type="checkbox" checked={batchDeleteAudio} onChange={(e) => setBatchDeleteAudio(e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+          <span className="text-xs text-gray-500">同时删除录音文件（wav，无法恢复）</span>
+        </label>
+      </ConfirmDialog>
     </div>
   );
 }

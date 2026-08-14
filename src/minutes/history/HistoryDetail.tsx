@@ -1,10 +1,12 @@
 // EasyWork - History Detail (view/edit meeting minutes + title + transcript)
 import { useState, useEffect, useRef } from "react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { ArrowLeft, Loader, Pencil, Check, X, MessageSquareText, PlayCircle } from "lucide-react";
+import { ArrowLeft, Loader, Pencil, Check, X, MessageSquareText, PlayCircle, Trash2 } from "lucide-react";
 import Markdown from "../../components/Markdown";
 import ExportDropdown from "../../components/ExportDropdown";
+import ConfirmDialog from "../../components/ConfirmDialog";
 import { ERRORS, toUserError } from "../../errors";
+import { showToast } from "../../components/Toast";
 
 interface MeetingDetail {
   id: string;
@@ -61,6 +63,7 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
   const [transcriptLoading, setTranscriptLoading] = useState(false);
   const [audioSrc, setAudioSrc] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number | null>(null);
+  const [confirmDeleteAudio, setConfirmDeleteAudio] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -108,6 +111,17 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
     audio.play().catch(() => {});
   };
 
+  const handleDeleteAudio = async () => {
+    try {
+      await invoke("delete_meeting_audio", { meetingId });
+      setConfirmDeleteAudio(false);
+      setAudioSrc(null);
+      showToast("音频已删除", "success");
+    } catch (e) {
+      showToast(toUserError(ERRORS.DELETE_MEETING, e), "error");
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setSaveError(null);
@@ -128,8 +142,16 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
       const res = await invoke<{ chunks: TranscriptChunk[]; segments: TranscriptSegment[] }>("get_meeting_transcript", { meetingId });
       // Prefer live speaker chunks (they carry start times); fall back to
       // final-transcription segments for older meetings without speaker data.
+      // Chunks arrive in transcription-completion order (two audio streams
+      // transcribe in parallel), so sort by start time for chronological view.
+      const sortByStart = (a: TranscriptChunk, b: TranscriptChunk) => {
+        if (a.start !== undefined && b.start !== undefined) return a.start - b.start;
+        if (a.start !== undefined) return -1;
+        if (b.start !== undefined) return 1;
+        return 0;
+      };
       if (res.chunks.length > 0) {
-        setTranscriptChunks(res.chunks);
+        setTranscriptChunks([...res.chunks].sort(sortByStart));
       } else {
         setTranscriptChunks(
           res.segments.map((s) => ({ speaker: "", text: s.text, start: s.start }))
@@ -283,10 +305,19 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
             {audioSrc && (
               <div className="px-6 pt-4 pb-1 border-b border-gray-50">
                 <audio ref={audioRef} src={audioSrc} controls className="w-full" />
-                <p className="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
-                  <PlayCircle size={12} />
-                  点击句子可跳转到对应音频位置
-                </p>
+                <div className="flex items-center justify-between mt-1.5">
+                  <p className="text-xs text-gray-400 flex items-center gap-1">
+                    <PlayCircle size={12} />
+                    点击句子可跳转到对应音频位置
+                  </p>
+                  <button
+                    onClick={() => setConfirmDeleteAudio(true)}
+                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors"
+                  >
+                    <Trash2 size={12} />
+                    删除音频
+                  </button>
+                </div>
               </div>
             )}
             <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -333,6 +364,15 @@ export default function HistoryDetail({ meetingId, onBack }: { meetingId: string
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteAudio}
+        icon={<Trash2 size={24} className="text-red-500" />}
+        title="删除音频"
+        description="确定要删除这条会议的录音文件吗？删除后无法恢复，转写文本仍会保留。"
+        onConfirm={handleDeleteAudio}
+        onCancel={() => setConfirmDeleteAudio(false)}
+      />
     </>
   );
 }

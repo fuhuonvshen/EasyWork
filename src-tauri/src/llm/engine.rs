@@ -165,15 +165,30 @@ impl LlmEngine {
     /// Download llama-server binary if not present.
     pub async fn ensure_binary(&self) -> Result<()> {
         if self.is_binary_ready() {
+            // Windows self-heal: NVIDIA driver present but bin_dir lacks the
+            // CUDA runtime DLLs (cudart64_*) — the existing binary is a CPU
+            // build. Re-download the CUDA build so inference can use the GPU.
+            // (The CUDA zip ships cudart/cublas, so a fresh download makes
+            // has_cuda_runtime() true and keeps gpu_layers at 99.)
+            #[cfg(target_os = "windows")]
+            {
+                if !(Self::has_nvidia_driver() && !Self::has_cuda_runtime(&self.bin_dir)) {
+                    return Ok(());
+                }
+                log::warn!("NVIDIA 驱动已检测到但 bin 目录缺少 CUDA 运行库 — 重新下载 CUDA 版 llama-server");
+            }
+            #[cfg(not(target_os = "windows"))]
             return Ok(());
         }
         std::fs::create_dir_all(&self.bin_dir)
             .context("创建二进制目录失败")?;
 
         let tag = "b10034";
-        // macOS 资产是 .tar.gz，其他平台是 .zip
+        // macOS 资产是 .tar.gz，其他平台是 .zip。
+        // CUDA 版选择只看 NVIDIA 驱动（zip 自带 cudart/cublas），
+        // 不能依赖 bin 目录现状——否则新环境永远下不到 CUDA 版。
         let (platform, is_targz) = if cfg!(target_os = "windows") {
-            (if self.gpu_layers > 0 { "win-cuda-12.4-x64" } else { "win-cpu-x64" }, false)
+            (if Self::has_nvidia_driver() { "win-cuda-12.4-x64" } else { "win-cpu-x64" }, false)
         } else if cfg!(target_os = "macos") { ("macos-arm64", true) }
         else { ("linux-x64", false) };
         let ext = if is_targz { "tar.gz" } else { "zip" };

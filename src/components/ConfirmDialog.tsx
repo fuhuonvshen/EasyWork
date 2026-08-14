@@ -12,6 +12,7 @@ export default function ConfirmDialog({
   confirmVariant = "danger",
   onConfirm,
   onCancel,
+  children,
 }: {
   open: boolean;
   icon?: ReactNode;
@@ -22,6 +23,7 @@ export default function ConfirmDialog({
   confirmVariant?: "danger" | "primary";
   onConfirm: () => void;
   onCancel: () => void;
+  children?: ReactNode;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -56,8 +58,9 @@ export default function ConfirmDialog({
       <div className="bg-white rounded-2xl shadow-xl p-6 mx-4 max-w-sm w-full text-center">
         {icon && <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">{icon}</div>}
         <h3 className="text-lg font-semibold text-gray-900 mb-1">{title}</h3>
-        {description && <p className="text-sm text-gray-500 whitespace-pre-line mb-6">{description}</p>}
-        <div className="flex gap-3 justify-center">
+        {description && <p className="text-sm text-gray-500 whitespace-pre-line mb-4">{description}</p>}
+        {children}
+        <div className="flex gap-3 justify-center mt-5">
           <button autoFocus onClick={onCancel} className="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors">{cancelLabel}</button>
           <button onClick={onConfirm} className={`px-5 py-2.5 text-sm font-medium text-white rounded-xl hover:opacity-90 transition-colors ${confirmVariant === "danger" ? "bg-red-500" : "bg-brand-600"}`}>{confirmLabel}</button>
         </div>

@@ -230,9 +230,10 @@ pub async fn toggle_pin_meeting(
 #[tauri::command]
 pub async fn delete_meeting(
     id: String,
+    delete_audio: Option<bool>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
-    crate::database::repo::delete_meeting(&db.0, &id)
+    crate::database::repo::delete_meeting(&db.0, &id, delete_audio.unwrap_or(false))
         .await
         .map_err(|e| format!("删除会议失败: {}", e))
 }
@@ -240,11 +241,24 @@ pub async fn delete_meeting(
 #[tauri::command]
 pub async fn delete_meetings(
     ids: Vec<String>,
+    delete_audio: Option<bool>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
-    crate::database::repo::delete_meetings(&db.0, &ids)
+    crate::database::repo::delete_meetings(&db.0, &ids, delete_audio.unwrap_or(false))
         .await
         .map_err(|e| format!("批量删除会议失败: {}", e))
+}
+
+/// Delete only the meeting's audio file(s), keeping the meeting record
+/// and its minutes/transcript. Returns whether a file was removed.
+#[tauri::command]
+pub async fn delete_meeting_audio(
+    meeting_id: String,
+    db: State<'_, DbState>,
+) -> Result<bool, String> {
+    crate::database::repo::delete_meeting_audio(&db.0, &meeting_id)
+        .await
+        .map_err(|e| format!("删除音频失败: {}", e))
 }
 
 #[tauri::command]
