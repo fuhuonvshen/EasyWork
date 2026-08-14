@@ -1,6 +1,6 @@
 @echo off
-REM EasyWork - 构建 Python Agent 独立可执行文件
-REM 使用 PyInstaller 将 py_backend/ 打包为单个 exe
+REM EasyWork - 构建 Python Agent 可执行目录
+REM 使用 PyInstaller 将 py_backend/ 打包为 onedir（exe + _internal/ 同目录）
 REM 运行前请先: pip install pyinstaller
 
 setlocal enabledelayedexpansion
@@ -19,10 +19,14 @@ if "%PROCESSOR_ARCHITECTURE%"=="AMD64" (
 
 echo ==^> 正在打包 Python Agent (EasyWork)...
 echo    架构: %ARCH%
-echo    输出: %OUT_DIR%/%AGENT_NAME%.exe
+echo    输出: %OUT_DIR%/%AGENT_NAME%/
 
 REM 清理旧构建
 if exist "%AGENT_NAME%.spec" del "%AGENT_NAME%.spec"
+REM 用 python 清理旧产物目录（参数传递，空变量只会报错，不会像 rmdir 那样误删盘）
+if exist "%OUT_DIR%\%AGENT_NAME%" (
+    python -c "import shutil,sys; shutil.rmtree(sys.argv[1])" "%OUT_DIR%\%AGENT_NAME%"
+)
 
 REM 创建输出目录
 if not exist "%OUT_DIR%" mkdir "%OUT_DIR%"
@@ -32,7 +36,8 @@ pip install pyinstaller >nul 2>&1
 
 REM 执行 PyInstaller
 REM agent_launcher.py 位于 py_backend 包外部，避免相对导入问题
-pyinstaller --onefile ^
+REM onedir 模式: 产物为 binaries/easywork-agent/（exe + _internal/）
+pyinstaller --onedir ^
     --name "%AGENT_NAME%" ^
     --distpath "%OUT_DIR%" ^
     --add-data "py_backend;py_backend" ^
@@ -70,6 +75,7 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo ==^> 构建成功！
-echo     输出文件: %OUT_DIR%/%AGENT_NAME%.exe
+echo     输出目录: %OUT_DIR%\%AGENT_NAME%\
+echo     主程序: %OUT_DIR%\%AGENT_NAME%\%AGENT_NAME%.exe
 echo.
 echo 接下来运行 pnpm tauri build 即可将 agent 打包进安装包

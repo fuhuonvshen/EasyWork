@@ -134,6 +134,11 @@ app.include_router(router)
 
 
 if __name__ == "__main__":
+    # Required for multiprocessing (spawn) inside the PyInstaller bundle —
+    # the code executor (tools/executor.py) uses it as the subprocess fallback.
+    import multiprocessing
+
+    multiprocessing.freeze_support()
     import uvicorn
 
     uvicorn.run("py_backend.main:app", host="127.0.0.1", port=AGENT_PORT, log_level="info")

@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import textwrap
+import traceback
 
 from ..config import AGENT_INPUT_DIR, AGENT_OUTPUT_DIR
 
@@ -36,16 +37,18 @@ class CodeExecutor:
         return self._docker_sandbox
 
     async def execute(self, code: str, timeout: int = EXEC_TIMEOUT) -> str:
-        """Execute Python code, preferring Docker sandbox, falling back to subprocess.
+        """Execute Python code, preferring Docker sandbox, falling back to restricted execution.
 
         Security model:
         - Docker sandbox = the REAL security boundary (hardware isolation).
-        - safe_mode_filter = defense-in-depth for subprocess fallback
+        - safe_mode_filter = defense-in-depth for restricted execution
           (catches obvious abuse but is NOT a security boundary —
            motivated code can trivially bypass regex filters).
         - Preamble imports are for convenience, not security.
+        - Restricted execution (multiprocessing/subprocess) = process isolation
+          + directory whitelist only, same tier as industry local agents.
         """
-        # Safety filter applies to both paths
+        # Safety filter applies to all paths
         from .sandbox import safe_mode_filter
         safe, reason = safe_mode_filter(code)
         if not safe:
@@ -54,11 +57,71 @@ class CodeExecutor:
 
         sandbox = await self._get_docker_sandbox()
         if await sandbox.check_available():
-            logger.info("Using Docker sandbox for execution")
-            return await sandbox.execute(code, timeout)
+            if sandbox.is_ready():
+                logger.info("Using Docker sandbox for execution")
+                return await sandbox.execute(code, timeout)
+            logger.warning("Docker daemon available but sandbox image not ready — falling back")
         else:
-            logger.info("Docker not available, falling back to subprocess")
-            return await self._execute_subprocess(code, timeout)
+            logger.info("Docker not available, falling back to restricted execution")
+        return await self._execute_fallback(code, timeout)
+
+    async def _execute_fallback(self, code: str, timeout: int) -> str:
+        """Restricted execution path.
+
+        PyInstaller bundle: sys.executable is the agent exe itself, so
+        `sys.executable -c` would launch a SECOND agent server instead of
+        running the code. Use multiprocessing (PyInstaller supports it via
+        freeze_support + the --multiprocessing-fork bootloader path) so the
+        bundled Python runtime executes the code in a child process.
+        """
+        if getattr(sys, "frozen", False):
+            return await self._execute_multiprocessing(code, timeout)
+        return await self._execute_subprocess(code, timeout)
+
+    async def _execute_multiprocessing(self, code: str, timeout: int) -> str:
+        """Execute Python code in a child process via multiprocessing (spawn).
+
+        Output goes to a temp file in OUTPUT_DIR: Windows spawn does not
+        inherit os.pipe() descriptors, so fd passing is not an option.
+        """
+        import multiprocessing as mp
+        import uuid
+
+        os.makedirs(AGENT_OUTPUT_DIR, exist_ok=True)
+        out_path = os.path.join(AGENT_OUTPUT_DIR, f".exec_out_{uuid.uuid4().hex[:12]}.txt")
+        ctx = mp.get_context("spawn")
+        proc = ctx.Process(target=_run_code_in_child, args=(code, out_path), daemon=True)
+        try:
+            proc.start()
+        except Exception as e:
+            logger.error("Multiprocessing executor failed to start: %s", e, exc_info=True)
+            return "[错误] 代码执行失败，请检查代码语法和逻辑后重试"
+
+        timed_out = False
+        try:
+            await asyncio.wait_for(
+                asyncio.get_running_loop().run_in_executor(None, proc.join), timeout
+            )
+        except asyncio.TimeoutError:
+            timed_out = True
+        finally:
+            proc.join(timeout=5)
+            if proc.is_alive():
+                proc.terminate()
+                proc.join(timeout=5)
+        try:
+            with open(out_path, "r", encoding="utf-8", errors="replace") as f:
+                output = f.read()
+        except OSError:
+            output = ""
+        finally:
+            try:
+                os.remove(out_path)
+            except OSError:
+                pass
+        if timed_out:
+            return f"[错误] 代码执行超时 ({timeout}秒)"
+        return output.strip() or "(无输出)"
 
     async def _execute_subprocess(self, code: str, timeout: int) -> str:
         """Execute Python code in a subprocess with safety restrictions.
@@ -123,3 +186,23 @@ def _wrap_code(code: str) -> str:
 
     full_code = preamble + "\n" + code
     return full_code
+
+
+def _run_code_in_child(code: str, out_path: str) -> None:
+    """Multiprocessing child entry: redirect stdout/stderr to a file, then exec the code.
+
+    Runs inside the PyInstaller-bundled Python runtime (spawned via
+    `--multiprocessing-fork`), which is a real Python interpreter — unlike
+    `sys.executable -c`, which would relaunch the agent exe as a server.
+    """
+    with open(out_path, "w", encoding="utf-8", errors="replace") as out:
+        sys.stdout = out
+        sys.stderr = out
+        try:
+            exec(compile(_wrap_code(code), "<agent_code>", "exec"), {"__name__": "__agent__"})
+        except SystemExit:
+            pass
+        except BaseException:
+            traceback.print_exc(file=out)
+        finally:
+            out.flush()

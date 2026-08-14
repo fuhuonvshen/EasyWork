@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicedoc/schemas/main/tauri/tauri.conf.schema.json",
   "productName": "EasyWork",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "identifier": "com.easywork",
   "build": {
     "frontendDist": "../dist",
@@ -31,7 +31,7 @@
     "active": true,
     "targets": "all",
     "resources": [
-      "binaries/easywork-agent*"
+      "binaries/easywork-agent"
     ],
     "macOS": {
       "minimumSystemVersion": "10.15",

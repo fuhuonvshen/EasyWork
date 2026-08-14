@@ -46,7 +46,7 @@ def system_prompt() -> str:
         "- 用户上传的文件：聊天消息中展示的是预览（可能截断），完整文件保存在本地（agent_input 目录）\n"
         "- 用户手动输入的信息\n\n"
         "文件操作规则（隐私要求，务必遵守）：\n"
-        "- 代码中通过 `Path(INPUT_DIR) / '文件名'` 读取输入文件，通过 `Path(OUTPUT_DIR) / '文件名'` 保存输出文件（INPUT_DIR / OUTPUT_DIR 已在执行环境中定义）\n"
+        "- 代码中通过 `Path(INPUT_DIR) / '文件名'` 读取输入文件，通过 `Path(OUTPUT_DIR) / '文件名'` 保存输出文件（INPUT_DIR / OUTPUT_DIR 是注入的 Python 全局变量，不是环境变量，直接使用即可，不要用 os.environ 查询）\n"
         "- 完整文件内容不得复制到对话或回答中；需要精确数据时，用代码按需读取必要部分（如某几行、某几列、统计汇总），只输出处理结果\n"
         "- 输出文件名必须包含日期，格式：xxx_YYYYMMDD.png"
     )
