@@ -41,6 +41,7 @@ export default function TodayView({
   const [meetingType, setMeetingType] = useState("其他");
   const [elapsed, setElapsed] = useState(0);
   const dragStartXRef = useRef(0);
+  const dragStartYRef = useRef(0);
 
   // 录制计时
   useEffect(() => {
@@ -59,13 +60,17 @@ export default function TodayView({
     return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
   };
 
-  const handleDragStart = (clientX: number) => {
+  const handleDragStart = (clientX: number, clientY?: number) => {
     dragStartXRef.current = clientX;
+    dragStartYRef.current = clientY ?? 0;
   };
-  const handleDragEnd = (clientX: number) => {
-    const delta = clientX - dragStartXRef.current;
-    if (Math.abs(delta) > 50) {
-      setCarouselPage(delta > 0 ? 0 : 1);
+  const handleDragEnd = (clientX: number, clientY?: number) => {
+    const dx = clientX - dragStartXRef.current;
+    const dy = (clientY ?? 0) - dragStartYRef.current;
+    // Only flip pages on a clearly horizontal swipe — vertical scrolling
+    // must never trigger a page change.
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+      setCarouselPage(dx > 0 ? 0 : 1);
     }
   };
 
@@ -442,22 +447,22 @@ export default function TodayView({
 
             {/* Carousel pages */}
             <div className="flex-1 overflow-hidden relative select-none"
-              onMouseDown={(e) => handleDragStart(e.clientX)}
-              onMouseUp={(e) => handleDragEnd(e.clientX)}
-              onTouchStart={(e) => handleDragStart(e.touches[0].clientX)}
-              onTouchEnd={(e) => handleDragEnd(e.changedTouches[0].clientX)}
+              onMouseDown={(e) => handleDragStart(e.clientX, e.clientY)}
+              onMouseUp={(e) => handleDragEnd(e.clientX, e.clientY)}
+              onTouchStart={(e) => handleDragStart(e.touches[0].clientX, e.touches[0].clientY)}
+              onTouchEnd={(e) => handleDragEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY)}
             >
               <div
                 className="flex h-full transition-transform duration-300 ease-in-out"
                 style={{ transform: `translateX(-${carouselPage * 100}%)` }}
               >
                 {/* Page 1: Summary */}
-                <div className="min-w-full h-full overflow-y-auto px-6 py-4">
+                <div className="min-w-full h-full min-h-0 overflow-y-auto px-6 py-4">
                   <Markdown content={minutes} />
                 </div>
 
                 {/* Page 2: Transcript with speaker labels */}
-                <div className="min-w-full h-full overflow-y-auto px-6 py-4">
+                <div className="min-w-full h-full min-h-0 overflow-y-auto px-6 py-4">
                   {liveTranscripts.length === 0 ? (
                     <p className="text-sm text-gray-400 pointer-events-none">无转写记录</p>
                   ) : (
