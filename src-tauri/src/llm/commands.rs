@@ -98,7 +98,8 @@ pub async fn llm_download_binary(
     let engine = state.0.read().await;
     // ensure_binary() 内部处理 ready 检查 + CUDA 自愈（驱动存在但 bin
     // 缺少 CUDA 运行库时重下 CUDA 版），这里不能提前返回。
-    engine.ensure_binary().await.map_err(|e| format!("下载 llama-server 失败: {}", e))?;
+    // 不重复加前缀——engine 的错误链已包含"下载 llama-server 失败"。
+    engine.ensure_binary().await.map_err(|e| format!("{}", e))?;
     drop(engine);
 
     #[cfg(not(target_os = "macos"))]
