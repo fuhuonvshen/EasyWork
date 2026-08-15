@@ -98,6 +98,22 @@ impl LlmEngine {
         true
     }
 
+    /// CUDA runtime DLLs required by the CUDA build of llama-server.
+    /// Newer llama.cpp release zips no longer ship them — they come in a
+    /// separate `cudart-llama-bin-*.zip` asset.
+    #[cfg(target_os = "windows")]
+    pub fn cuda_runtime_dlls() -> [&'static str; 3] {
+        ["cudart64_12.dll", "cublas64_12.dll", "cublasLt64_12.dll"]
+    }
+
+    /// Strict check: all CUDA runtime DLLs present in bin_dir.
+    #[cfg(target_os = "windows")]
+    pub fn has_cuda_runtime_dlls(bin_dir: &std::path::Path) -> bool {
+        Self::cuda_runtime_dlls()
+            .iter()
+            .all(|f| bin_dir.join(f).exists())
+    }
+
     /// Copy the bundled llama-server binary (and all companion DLLs) to bin_dir.
     /// Called once during app setup. Missing files are copied in; existing
     /// files are kept (bin_dir may already hold a downloaded build), so a
@@ -164,20 +180,18 @@ impl LlmEngine {
 
     /// Download llama-server binary if not present.
     pub async fn ensure_binary(&self) -> Result<()> {
-        if self.is_binary_ready() {
-            // Windows self-heal: NVIDIA driver present but bin_dir lacks the
-            // CUDA runtime DLLs (cudart64_*) — the existing binary is a CPU
-            // build. Re-download the CUDA build so inference can use the GPU.
-            // (The CUDA zip ships cudart/cublas, so a fresh download makes
-            // has_cuda_runtime() true and keeps gpu_layers at 99.)
-            #[cfg(target_os = "windows")]
-            {
-                if !(Self::has_nvidia_driver() && !Self::has_cuda_runtime(&self.bin_dir)) {
-                    return Ok(());
-                }
-                log::warn!("NVIDIA 驱动已检测到但 bin 目录缺少 CUDA 运行库 — 重新下载 CUDA 版 llama-server");
+        // Windows self-heal: NVIDIA driver present but bin_dir lacks the CUDA
+        // runtime DLLs. Newer llama.cpp CUDA zips no longer ship cudart/cublas
+        // (separate `cudart-llama-bin-*.zip` asset) — top up just the runtime
+        // instead of re-downloading the whole build.
+        #[cfg(target_os = "windows")]
+        if Self::has_nvidia_driver() && !Self::has_cuda_runtime_dlls(&self.bin_dir) {
+            if self.is_binary_ready() {
+                log::warn!("llama-server 已就位但缺少 CUDA 运行库 — 仅下载运行库包");
+                return self.ensure_cuda_runtime().await;
             }
-            #[cfg(not(target_os = "windows"))]
+        }
+        if self.is_binary_ready() {
             return Ok(());
         }
         std::fs::create_dir_all(&self.bin_dir)
@@ -185,8 +199,7 @@ impl LlmEngine {
 
         let tag = "b10034";
         // macOS 资产是 .tar.gz，其他平台是 .zip。
-        // CUDA 版选择只看 NVIDIA 驱动（zip 自带 cudart/cublas），
-        // 不能依赖 bin 目录现状——否则新环境永远下不到 CUDA 版。
+        // CUDA 版选择只看 NVIDIA 驱动，不能依赖 bin 目录现状。
         let (platform, is_targz) = if cfg!(target_os = "windows") {
             (if Self::has_nvidia_driver() { "win-cuda-12.4-x64" } else { "win-cpu-x64" }, false)
         } else if cfg!(target_os = "macos") { ("macos-arm64", true) }
@@ -196,18 +209,57 @@ impl LlmEngine {
         // Try the hardcoded URL first
         let asset_name = format!("llama-{tag}-bin-{platform}.{}", ext);
         let url = format!("https://github.com/ggml-org/llama.cpp/releases/download/{tag}/{asset_name}");
-        match self.download_and_extract(&url, is_targz).await {
-            Ok(()) => return Ok(()),
-            Err(e) => log::warn!("固定地址下载失败 ({}), 尝试通过 GitHub API 查找正确资产...", e),
+        match self.download_and_extract_with_retry(&url, is_targz, 3).await {
+            Ok(()) => {}
+            Err(e) => {
+                log::warn!("固定地址下载失败 ({}), 尝试通过 GitHub API 查找正确资产...", e);
+                // Fallback: query GitHub API for the latest release and find the matching asset
+                let tag_new = self.latest_release_tag().await?;
+                let mut found: Option<String> = None;
+                let api_url = "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest";
+                let client = reqwest::Client::builder()
+                    .user_agent("EasyWork")
+                    .build()
+                    .context("创建 HTTP 客户端失败")?;
+                let json: serde_json::Value = client.get(api_url).send().await
+                    .context("查询 llama.cpp 最新版本失败")?
+                    .json().await
+                    .context("解析 GitHub API 响应失败")?;
+                if let Some(assets) = json["assets"].as_array() {
+                    for asset in assets {
+                        let name = asset["name"].as_str().unwrap_or("");
+                        if name.contains(platform) && (name.ends_with(&ext) || name.ends_with(".zip")) {
+                            found = Some(name.to_string());
+                            break;
+                        }
+                    }
+                }
+                let asset_name = found.ok_or_else(|| anyhow::anyhow!(
+                    "未在 llama.cpp 最新版本 ({}) 中找到匹配资产 (平台: {})", tag_new, platform
+                ))?;
+                let is_targz = asset_name.ends_with(".tar.gz");
+                let url = format!("https://github.com/ggml-org/llama.cpp/releases/download/{}/{}", tag_new, asset_name);
+                log::info!("通过 GitHub API 找到资产: {}", asset_name);
+                self.download_and_extract_with_retry(&url, is_targz, 3).await?;
+            }
         }
 
-        // Fallback: query GitHub API for the latest release and find the matching asset
+        // CUDA build downloaded — top up the CUDA runtime DLLs (newer llama.cpp
+        // zips don't include them; they live in a separate cudart asset).
+        #[cfg(target_os = "windows")]
+        if Self::has_nvidia_driver() && !Self::has_cuda_runtime_dlls(&self.bin_dir) {
+            self.ensure_cuda_runtime().await?;
+        }
+        Ok(())
+    }
+
+    /// Query llama.cpp latest release tag via GitHub API.
+    async fn latest_release_tag(&self) -> Result<String> {
         let api_url = "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest";
         let client = reqwest::Client::builder()
             .user_agent("EasyWork")
             .build()
             .context("创建 HTTP 客户端失败")?;
-
         let resp = client.get(api_url).send().await
             .context("查询 llama.cpp 最新版本失败")?;
         if !resp.status().is_success() {
@@ -215,26 +267,47 @@ impl LlmEngine {
         }
         let json: serde_json::Value = resp.json().await
             .context("解析 GitHub API 响应失败")?;
+        Ok(json["tag_name"].as_str().unwrap_or("b10034").to_string())
+    }
 
-        let tag_new = json["tag_name"].as_str().unwrap_or(tag);
-        let mut found: Option<String> = None;
-        if let Some(assets) = json["assets"].as_array() {
-            for asset in assets {
-                let name = asset["name"].as_str().unwrap_or("");
-                if name.contains(platform) && (name.ends_with(&ext) || name.ends_with(".zip")) {
-                    found = Some(name.to_string());
-                    break;
+    /// Download the CUDA runtime package (cudart/cublas/cublasLt) into bin_dir.
+    /// Newer llama.cpp releases ship these as a separate
+    /// `cudart-llama-bin-win-cuda-12.4-x64.zip` asset.
+    #[cfg(target_os = "windows")]
+    async fn ensure_cuda_runtime(&self) -> Result<()> {
+        let tag = self.latest_release_tag().await?;
+        let url = format!(
+            "https://github.com/ggml-org/llama.cpp/releases/download/{}/cudart-llama-bin-win-cuda-12.4-x64.zip",
+            tag
+        );
+        log::info!("下载 CUDA 运行库包 ({}): {}", tag, url);
+        self.download_and_extract_with_retry(&url, false, 3).await
+    }
+
+    /// Download + extract with automatic retries (exponential backoff).
+    async fn download_and_extract_with_retry(
+        &self,
+        url: &str,
+        is_targz: bool,
+        retries: u32,
+    ) -> Result<()> {
+        let mut last_err: Option<anyhow::Error> = None;
+        for attempt in 0..retries {
+            match self.download_and_extract(url, is_targz).await {
+                Ok(()) => return Ok(()),
+                Err(e) => {
+                    log::warn!("下载失败 (第 {}/{} 次尝试): {}", attempt + 1, retries, e);
+                    last_err = Some(e);
+                    if attempt + 1 < retries {
+                        tokio::time::sleep(
+                            std::time::Duration::from_secs(3 * (attempt as u64 + 1)),
+                        )
+                        .await;
+                    }
                 }
             }
         }
-
-        let asset_name = found.ok_or_else(|| anyhow::anyhow!(
-            "未在 llama.cpp 最新版本 ({}) 中找到匹配资产 (平台: {})", tag_new, platform
-        ))?;
-        let is_targz = asset_name.ends_with(".tar.gz");
-        let url = format!("https://github.com/ggml-org/llama.cpp/releases/download/{}/{}", tag_new, asset_name);
-        log::info!("通过 GitHub API 找到资产: {}", asset_name);
-        self.download_and_extract(&url, is_targz).await
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("下载失败")))
     }
 
     /// Download llama-server archive and extract executable + companion files into bin_dir.
@@ -336,12 +409,18 @@ impl LlmEngine {
             for i in 0..archive.len() {
                 let mut entry = archive.by_index(i)?;
                 let name = entry.name().to_string();
-                // Extract exe, DLLs (Windows), or unix binary (macOS/Linux)
-                if name.ends_with(".exe") || name.ends_with(".dll") || name.ends_with("llama-server") {
-                    let dst = self.bin_dir.join(&name);
+                // Extract exe, DLLs (Windows), or unix binary (macOS/Linux).
+                // Flatten to file names only — some zips (e.g. the cudart
+                // runtime package) keep files under subdirectories.
+                let fname = std::path::Path::new(&name)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string());
+                let Some(fname) = fname else { continue };
+                if fname.ends_with(".exe") || fname.ends_with(".dll") || fname == "llama-server" {
+                    let dst = self.bin_dir.join(&fname);
                     let mut out = std::fs::File::create(&dst)?;
                     std::io::copy(&mut entry, &mut out)?;
-                    log::info!("Extracted: {}", name);
+                    log::info!("Extracted: {}", fname);
                 }
             }
         }

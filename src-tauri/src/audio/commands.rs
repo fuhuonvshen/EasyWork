@@ -135,7 +135,9 @@ pub async fn start_capture(
     let spawn_transcriber = |mut rx: tokio::sync::mpsc::UnboundedReceiver<Vec<f32>>,
                               default_speaker: &'static str,
                               app_handle: tauri::AppHandle,
-                              diarize: Option<Arc<DiarizationEngine>>| {
+                              diarize: Option<Arc<DiarizationEngine>>,
+                              vad_threshold: f32,
+                              min_segment_secs: f32| {
         let buf_clone = buf.clone();
         let w_engine = whisper_engine.clone();
         let sv_engine_opt = sv_engine.clone();
@@ -146,7 +148,10 @@ pub async fn start_capture(
             let vad_config = sherpa_onnx::VadModelConfig {
                 silero_vad: sherpa_onnx::SileroVadModelConfig {
                     model: Some(model_path.to_string_lossy().to_string()),
-                    threshold: 0.5,
+                    // Mic stream uses a higher threshold so incidental
+                    // environment sounds (keyboard, coughs) don't trigger
+                    // transcription as "我".
+                    threshold: vad_threshold,
                     min_silence_duration: 0.4,
                     min_speech_duration: 0.5,
                     max_speech_duration: 15.0,
@@ -212,7 +217,16 @@ pub async fn start_capture(
                     // segment's own samples (VAD buffers the tail silence).
                     let start_secs = (pos_16k.saturating_sub(samples.len())) as f32 / 16000.0;
                     vad.pop();
-                    if dur < 0.5 { continue; }
+                    if dur < min_segment_secs { continue; }
+
+                    // RMS energy gate: RNNoise suppresses steady noise but
+                    // can amplify low-energy transients into speech-like
+                    // output — drop segments below speech-level energy.
+                    let rms = (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt();
+                    if rms < 0.01 {
+                        log::debug!("噪声段被 RMS 过滤: rms={:.4}, dur={:.2}s", rms, dur);
+                        continue;
+                    }
 
                     // ── Speaker diarization ─────────────────────────────
                     let speaker_label = if let Some(ref engine) = diarize {
@@ -304,8 +318,10 @@ pub async fn start_capture(
         })
     };
 
-    let handle1 = spawn_transcriber(audio_rx, "发言人", app_for_task.clone(), diarize_engine);
-    let handle2 = spawn_transcriber(mic_audio_rx, "我", app_for_task, None);
+    // Loopback stream: standard VAD sensitivity (0.5) + short segments ok.
+    let handle1 = spawn_transcriber(audio_rx, "发言人", app_for_task.clone(), diarize_engine, 0.5, 0.5);
+    // Mic stream: stricter — only speech-like, longer sounds get labeled "我".
+    let handle2 = spawn_transcriber(mic_audio_rx, "我", app_for_task, None, 0.7, 1.0);
 
     {
         let mut tg = task_state.0.lock().map_err(|e| format!("状态锁失败: {}", e))?;

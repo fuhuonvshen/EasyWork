@@ -305,20 +305,20 @@ export default function TodayView({
           )}
 
           <div className="max-w-3xl mx-auto space-y-3">
-            {liveTranscripts.map((item, i) => (
-              <div key={i} className="flex gap-3 text-sm group">
-                <span
-                  className={`flex-shrink-0 text-xs px-2 py-1 rounded font-medium h-fit ${
-                    item.speaker === "我"
-                      ? "bg-brand-100 text-brand-700"
-                      : "bg-brand-100 text-brand-700"
-                  }`}
-                >
-                  {item.speaker}
-                </span>
-                <p className="text-gray-700 leading-relaxed pt-0.5">{item.text}</p>
-              </div>
-            ))}
+            {liveTranscripts.map((item, i) => {
+              const s = getSpeakerStyle(item.speaker);
+              return (
+                <div key={i} className="flex gap-3 text-sm group">
+                  <span
+                    className="flex-shrink-0 text-xs px-2 py-1 rounded font-medium h-fit"
+                    style={{ backgroundColor: s.bg, color: s.text }}
+                  >
+                    {item.speaker}
+                  </span>
+                  <p className="text-gray-700 leading-relaxed pt-0.5">{item.text}</p>
+                </div>
+              );
+            })}
           </div>
         </main>
 
