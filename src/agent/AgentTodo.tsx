@@ -1,10 +1,43 @@
 // EasyWork - Agent Todo List View
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ListTodo, Plus, Trash2, AlertCircle } from "lucide-react";
 import type { TodoItem } from "../types";
 import { showToast } from "../components/Toast";
 import { ERRORS, toUserError } from "../errors";
+
+// 截止时间字段：与会议记录列表的 DateField 一致——原生 input 隐藏，
+// 按钮触发系统日历，显示层统一 YYYY-MM-DD（避免系统 "yyyy/mm/日" 格式）
+function DeadlineField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div className="relative">
+      <input
+        ref={inputRef}
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label="截止时间"
+        className="sr-only"
+      />
+      <button
+        type="button"
+        onClick={() => {
+          const el = inputRef.current;
+          if (!el) return;
+          try {
+            el.showPicker();
+          } catch {
+            el.click();
+          }
+        }}
+        className="w-full flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white hover:bg-gray-50 transition-colors"
+      >
+        {value ? <span className="text-gray-700">{value}</span> : <span className="text-gray-400">选择日期</span>}
+      </button>
+    </div>
+  );
+}
 
 interface Props {
   todos: TodoItem[];
@@ -102,12 +135,7 @@ export default function AgentTodo({ todos, onRefresh, onToggle, onDelete }: Prop
             </div>
             <div className="w-36">
               <label className="text-xs font-medium text-gray-500 mb-1 block">截止时间</label>
-              <input
-                type="date"
-                value={formDeadline}
-                onChange={(e) => setFormDeadline(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-              />
+              <DeadlineField value={formDeadline} onChange={setFormDeadline} />
             </div>
             <div className="w-24">
               <label className="text-xs font-medium text-gray-500 mb-1 block">优先级</label>
