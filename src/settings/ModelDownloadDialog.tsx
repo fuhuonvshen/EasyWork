@@ -258,7 +258,7 @@ export default function ModelDownloadDialog({
             <p className="text-[10px] text-gray-400 mt-1">
               {binaryStatus && binaryStatus.totalBytes > 0
                 ? `${binaryStatus.progress}% · ${(binaryStatus.speed / 1024 / 1024).toFixed(1)} MB/s`
-                : "正在下载（约 60-80 MB）..."}
+                : "正在下载（约 20-240 MB，视 CPU / CUDA 版而定）..."}
             </p>
           </div>
         )}
